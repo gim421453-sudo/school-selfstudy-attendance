@@ -8,6 +8,7 @@ export interface AssignmentInput {
   academicYearId: string;
   gradeId: string;
   uid: string;
+  displayName?: string;
 }
 
 function validateAssignment(input: AssignmentInput) {
@@ -16,8 +17,8 @@ function validateAssignment(input: AssignmentInput) {
   }
 }
 
-function assignmentDocument(input: AssignmentInput, role: StaffRole, active: boolean) {
-  return { academicYearId: input.academicYearId, gradeId: input.gradeId, uid: input.uid, role, active };
+export function buildStaffAssignmentDocument(input: AssignmentInput, role: StaffRole, active: boolean) {
+  return { academicYearId: input.academicYearId, gradeId: input.gradeId, uid: input.uid, role, active, ...(input.displayName?.trim() ? { displayName: input.displayName.trim() } : {}) };
 }
 
 export async function listAssignmentsForYear(academicYearId: string): Promise<StaffAssignment[]> {
@@ -45,7 +46,7 @@ async function saveAssignment(input: AssignmentInput, role: StaffRole, action: s
   validateAssignment(input);
   const id = makeStaffAssignmentId(input.academicYearId, input.gradeId, input.uid);
   const before = await getAssignment(input.academicYearId, input.gradeId, input.uid);
-  const next = assignmentDocument(input, role, true);
+  const next = { ...buildStaffAssignmentDocument(input, role, true), ...(!input.displayName?.trim() && before?.displayName ? { displayName: before.displayName } : {}) };
   const batch = writeBatch(db);
   batch.set(doc(db, "staffAssignments", id), {
     ...next,
@@ -76,7 +77,7 @@ export async function removeGradeAdmin(input: AssignmentInput, actor: AuditActor
   const before = await getAssignment(input.academicYearId, input.gradeId, input.uid);
   if (!before || before.role !== "grade_admin") return;
   const id = makeStaffAssignmentId(input.academicYearId, input.gradeId, input.uid);
-  const next = assignmentDocument(input, "teacher", before.active);
+  const next = buildStaffAssignmentDocument(input, "teacher", before.active);
   const batch = writeBatch(db);
   batch.update(doc(db, "staffAssignments", id), { role: "teacher", updatedAt: serverTimestamp() });
   appendAuditLog(batch, { actor, action: "GRADE_ADMIN_REMOVED", targetType: "staff_assignment", targetId: id, before: { ...before }, after: next });

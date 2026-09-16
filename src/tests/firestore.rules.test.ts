@@ -362,4 +362,23 @@ suite("Firestore security rules", () => {
     await assertSucceeds(getDoc(doc(teacherDb, ...recordPath)));
     await assertSucceeds(setDoc(doc(ownerDb, "settings", "operations"), { ...operations("NORMAL"), updatedBy: "owner", updatedAt: serverTimestamp() }));
   });
+
+  it("validates optional StaffAssignment displayName projections without changing authority", async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, "grades", "projection-grade"), { academicYearId: "2026", gradeNumber: 1, displayName: "1", active: true });
+      await setDoc(doc(db, "users", "projection-user"), user("projection-user", ["teacher"], { globalRoles: ["teacher"] }));
+      await setDoc(doc(db, "staffAssignments", "2026_projection-grade_legacy"), { academicYearId: "2026", gradeId: "projection-grade", uid: "legacy", role: "teacher", active: true });
+    });
+    const ownerDb = env.authenticatedContext("owner").firestore();
+    const base = { academicYearId: "2026", gradeId: "projection-grade", uid: "projection-user", role: "teacher", active: true };
+    const ref = doc(ownerDb, "staffAssignments", "2026_projection-grade_projection-user");
+    await assertSucceeds(setDoc(ref, base));
+    await assertSucceeds(updateDoc(ref, { displayName: "김민수" }));
+    await assertFails(setDoc(doc(ownerDb, "staffAssignments", "2026_projection-grade_empty"), { ...base, uid: "empty", displayName: "" }));
+    await assertFails(setDoc(doc(ownerDb, "staffAssignments", "2026_projection-grade_number"), { ...base, uid: "number", displayName: 1 }));
+    await assertFails(setDoc(doc(ownerDb, "staffAssignments", "2026_projection-grade_long"), { ...base, uid: "long", displayName: "a".repeat(121) }));
+    await assertSucceeds(updateDoc(doc(ownerDb, "staffAssignments", "2026_projection-grade_legacy"), { displayName: "Legacy" }));
+    await assertFails(getDocs(collection(env.authenticatedContext("teacher").firestore(), "users")));
+  });
 });

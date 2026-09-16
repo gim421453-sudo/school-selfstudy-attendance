@@ -39,6 +39,8 @@ export interface StaffAssignment extends Scope {
   uid: string;
   role: StaffRole;
   active: boolean;
+  /** Non-authoritative display snapshot for scoped candidate lists. */
+  displayName?: string;
   createdAt?: unknown;
   updatedAt?: unknown;
 }
