@@ -175,6 +175,33 @@ export interface AccessSettings {
   homeroomStatsScope: "own_class" | "grade";
 }
 
+export type EmergencyMode =
+  | "NORMAL"
+  | "READ_ONLY"
+  | "ESSENTIAL_ONLY"
+  | "MAINTENANCE"
+  | "LOCKDOWN";
+
+export interface MaintenanceSettings {
+  enabled: boolean;
+  title: string;
+  message: string;
+  noticeFrom: unknown | null;
+  startsAt: unknown | null;
+  endsAt: unknown | null;
+  bannerEnabled: boolean;
+  popupEnabled: boolean;
+}
+
+/** Operational controls are intentionally separate from access-policy settings. */
+export interface OperationsSettings {
+  emergencyMode: EmergencyMode;
+  emergencyMessage: string;
+  maintenance: MaintenanceSettings;
+  updatedAt?: unknown;
+  updatedBy: string;
+}
+
 export interface AuditLog {
   id?: string;
   action: string;

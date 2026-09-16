@@ -312,4 +312,54 @@ suite("Firestore security rules", () => {
     badBatch.set(doc(teacherA, "attendance", dayId, "records", "att-c1__att-p2__att-s2"), { ...record("att-s2"), periodId: "att-p2" });
     await assertFails(badBatch.commit());
   });
+
+  it("enforces emergency modes while preserving owner-only operations control", async () => {
+    const operations = (emergencyMode: string, maintenance: Record<string, unknown> = { enabled: false, title: "", message: "", noticeFrom: null, startsAt: null, endsAt: null, bannerEnabled: true, popupEnabled: true }) => ({ emergencyMode, emergencyMessage: "notice", maintenance, updatedAt: Timestamp.now(), updatedBy: "owner" });
+    const record = { academicYearId: "2026", gradeId: "mode-grade", date: "2026-09-16", classId: "mode-class", studentId: "mode-student", periodId: "mode-period", status: "present", note: "", markedBy: "mode-teacher", markedAt: serverTimestamp(), updatedAt: serverTimestamp() };
+    const recordPath = ["attendance", "mode-grade_2026-09-16", "records", "mode-class__mode-period__mode-student"] as const;
+    await env.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await Promise.all([
+        setDoc(doc(db, "users", "mode-teacher"), user("mode-teacher", ["teacher"], { globalRoles: ["teacher"] })),
+        setDoc(doc(db, "staffAssignments", "2026_mode-grade_mode-teacher"), { academicYearId: "2026", gradeId: "mode-grade", uid: "mode-teacher", role: "teacher", active: true }),
+        setDoc(doc(db, "classes", "mode-class"), { academicYearId: "2026", gradeId: "mode-grade", classNumber: 1, displayName: "1-1", active: true }),
+        setDoc(doc(db, "students", "mode-student"), { academicYearId: "2026", gradeId: "mode-grade", classId: "mode-class", studentNo: 1, name: "Mode", active: true }),
+        setDoc(doc(db, "periods", "mode-period"), { academicYearId: "2026", gradeId: "mode-grade", name: "P1", order: 1, active: true }),
+        setDoc(doc(db, "dutyAssignments", "mode-grade_2026-09-16"), { academicYearId: "2026", gradeId: "mode-grade", date: "2026-09-16", schemaVersion: 2, updatedAt: Timestamp.now() }),
+        setDoc(doc(db, "dutyAssignments", "mode-grade_2026-09-16", "periods", "mode-period"), { academicYearId: "2026", gradeId: "mode-grade", date: "2026-09-16", periodId: "mode-period", teacherUid: "mode-teacher", teacherName: "Mode", editableFrom: Timestamp.fromDate(new Date("2000-01-01T00:00:00Z")), editableUntil: Timestamp.fromDate(new Date("2100-01-01T00:00:00Z")), updatedAt: Timestamp.now() }),
+      ]);
+    });
+    const ownerDb = env.authenticatedContext("owner").firestore();
+    const teacherDb = env.authenticatedContext("mode-teacher").firestore();
+    await assertSucceeds(getDoc(doc(teacherDb, "settings", "operations")));
+    await assertFails(setDoc(doc(teacherDb, "settings", "operations"), { ...operations("LOCKDOWN"), updatedBy: "mode-teacher", updatedAt: serverTimestamp() }));
+
+    await env.withSecurityRulesDisabled(async (context) => setDoc(doc(context.firestore(), "settings", "operations"), operations("READ_ONLY")));
+    await assertFails(setDoc(doc(teacherDb, ...recordPath), record));
+    await assertFails(setDoc(doc(ownerDb, "periods", "owner-read-only"), { academicYearId: "2026", gradeId: "mode-grade", name: "P2", order: 2, active: true }));
+
+    await env.withSecurityRulesDisabled(async (context) => setDoc(doc(context.firestore(), "settings", "operations"), operations("ESSENTIAL_ONLY")));
+    await assertSucceeds(setDoc(doc(teacherDb, ...recordPath), record));
+    await assertSucceeds(setDoc(doc(teacherDb, "auditLogs", "essential-audit"), { actorUid: "mode-teacher", actorName: "Mode", action: "ATTENDANCE_CREATED", targetType: "attendance", targetId: "mode", before: null, after: {}, source: "manual", academicYearId: "2026", gradeId: "mode-grade", classId: "mode-class", studentId: "mode-student", periodId: "mode-period", dutyDate: "2026-09-16", timestamp: serverTimestamp() }));
+    await assertFails(setDoc(doc(teacherDb, "periods", "teacher-essential"), { academicYearId: "2026", gradeId: "mode-grade", name: "P2", order: 2, active: true }));
+
+    await env.withSecurityRulesDisabled(async (context) => setDoc(doc(context.firestore(), "settings", "operations"), operations("MAINTENANCE")));
+    await assertFails(getDoc(doc(teacherDb, ...recordPath)));
+    await assertSucceeds(setDoc(doc(ownerDb, "periods", "owner-maintenance"), { academicYearId: "2026", gradeId: "mode-grade", name: "P2", order: 2, active: true }));
+
+    await env.withSecurityRulesDisabled(async (context) => setDoc(doc(context.firestore(), "settings", "operations"), operations("LOCKDOWN")));
+    await assertFails(getDoc(doc(teacherDb, ...recordPath)));
+    await assertSucceeds(getDoc(doc(ownerDb, ...recordPath)));
+    await assertFails(setDoc(doc(ownerDb, "periods", "owner-lockdown"), { academicYearId: "2026", gradeId: "mode-grade", name: "P3", order: 3, active: true }));
+
+    const now = Date.now();
+    const activeWindow = { enabled: true, title: "Maintenance", message: "Active", noticeFrom: Timestamp.fromMillis(now - 120_000), startsAt: Timestamp.fromMillis(now - 60_000), endsAt: Timestamp.fromMillis(now + 60_000), bannerEnabled: true, popupEnabled: true };
+    await env.withSecurityRulesDisabled(async (context) => setDoc(doc(context.firestore(), "settings", "operations"), operations("NORMAL", activeWindow)));
+    await assertFails(getDoc(doc(teacherDb, ...recordPath)));
+    await assertSucceeds(setDoc(doc(ownerDb, "periods", "owner-scheduled-maintenance"), { academicYearId: "2026", gradeId: "mode-grade", name: "P4", order: 4, active: true }));
+    const expiredWindow = { ...activeWindow, startsAt: Timestamp.fromMillis(now - 180_000), endsAt: Timestamp.fromMillis(now - 120_000) };
+    await env.withSecurityRulesDisabled(async (context) => setDoc(doc(context.firestore(), "settings", "operations"), operations("NORMAL", expiredWindow)));
+    await assertSucceeds(getDoc(doc(teacherDb, ...recordPath)));
+    await assertSucceeds(setDoc(doc(ownerDb, "settings", "operations"), { ...operations("NORMAL"), updatedBy: "owner", updatedAt: serverTimestamp() }));
+  });
 });
