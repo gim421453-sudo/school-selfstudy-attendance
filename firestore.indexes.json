@@ -23,6 +23,16 @@
       "fields": [
         { "fieldPath": "academicYearId", "order": "ASCENDING" },
         { "fieldPath": "gradeId", "order": "ASCENDING" },
+        { "fieldPath": "schemaVersion", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "dutyAssignments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "academicYearId", "order": "ASCENDING" },
+        { "fieldPath": "gradeId", "order": "ASCENDING" },
         { "fieldPath": "date", "order": "ASCENDING" }
       ]
     },

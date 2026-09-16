@@ -32,7 +32,7 @@ function mapException(id: string, data: Omit<ScopedException, "id">): ScopedExce
 }
 
 export async function listSchoolExceptions(academicYearId: string): Promise<ScopedException[]> {
-  const snapshot = await getDocs(query(collection(db, "selfStudyExceptions"), where("academicYearId", "==", academicYearId), where("scopeType", "==", "school"), orderBy("date")));
+  const snapshot = await getDocs(query(collection(db, "selfStudyExceptions"), where("academicYearId", "==", academicYearId), where("scopeType", "==", "school"), where("gradeId", "==", null), orderBy("date")));
   return snapshot.docs.map((item) => mapException(item.id, item.data() as Omit<ScopedException, "id">));
 }
 

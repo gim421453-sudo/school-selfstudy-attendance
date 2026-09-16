@@ -110,6 +110,7 @@ export async function listDutyV2Assignments(scope: Omit<DutyV2Scope, "date">, ra
     collection(db, "dutyAssignments"),
     where("academicYearId", "==", scope.academicYearId),
     where("gradeId", "==", scope.gradeId),
+    where("schemaVersion", "==", 2),
     where("date", ">=", range.start),
     where("date", "<=", range.end),
     orderBy("date"),
