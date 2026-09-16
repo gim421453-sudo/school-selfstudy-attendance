@@ -265,6 +265,7 @@ export interface SelfStudyAttendanceReadRow {
   selfStudyGroupDisplayName: string;
   existingAttendanceStatus: SelfStudyAttendanceStatus | null;
   hasPermission: boolean;
+  permissionPeriodIds?: string[];
   permissionReasonCode?: SelfStudyPermissionReasonCode;
   permissionReasonText?: string;
 }

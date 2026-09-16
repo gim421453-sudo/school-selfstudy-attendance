@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
 import { isGradeAdminForGrade, isSystemOwner } from "../domain/scope";
-import { buildBulkPresentDraft, countUnenteredSelfStudyAttendance, resolveSelfStudyAttendanceDisplayStatus, SELF_STUDY_ATTENDANCE_LABELS, type SelfStudyAttendanceDraft } from "../domain/selfStudyOperation";
+import { buildBulkPresentDraft, countUnenteredSelfStudyAttendance, isSelfStudySupervisorEditable, resolveSelfStudyAttendanceDisplayStatus, selectInitialSelfStudyGroupId, SELF_STUDY_ATTENDANCE_LABELS, type SelfStudyAttendanceDraft } from "../domain/selfStudyOperation";
 import { listScopedPeriods, type ScopedPeriod } from "../services/scopedPeriods";
 import { listSelfStudyAttendanceReadRows, writeSelfStudyAttendance } from "../services/selfStudyAttendance";
 import { listSelfStudyGroupPeriods, listSelfStudyGroups, listSupervisionAssignments, supervisedGroupIdsForTeacher } from "../services/selfStudyOperations";
@@ -18,7 +18,7 @@ function canEditAssignment(assignment: SupervisionAssignment | undefined) {
   const from = timestampToDate(assignment?.editableFrom);
   const until = timestampToDate(assignment?.editableUntil);
   const now = new Date();
-  return Boolean(assignment?.active && from && until && now >= from && now <= until);
+  return Boolean(assignment?.active && isSelfStudySupervisorEditable(from, until, now));
 }
 
 function statusClass(status: string | null) {
@@ -80,7 +80,7 @@ export function SelfStudyAttendancePage() {
   const availableGroups = useMemo(() => groups.filter((group) => group.active && availableGroupIds.includes(group.id)), [groups, availableGroupIds]);
 
   useEffect(() => {
-    if (!availableGroups.some((group) => group.id === groupId)) setGroupId(availableGroups[0]?.id ?? "");
+    setGroupId((currentGroupId) => selectInitialSelfStudyGroupId(availableGroups.map((group) => group.id), currentGroupId));
   }, [availableGroups, groupId]);
 
   useEffect(() => {
@@ -173,11 +173,12 @@ export function SelfStudyAttendancePage() {
         const status = resolveSelfStudyAttendanceDisplayStatus(row, drafts[row.studentId]);
         return <article className="self-study-student-card" key={row.studentId}>
           <div className="student-card-heading"><div><strong>{row.studentName}</strong><span>{row.classDisplayName}</span></div><span className={`attendance-tag ${statusClass(status)}`}>{status ? SELF_STUDY_ATTENDANCE_LABELS[status] : "미입력"}</span></div>
-          {row.hasPermission && <div className="permission-badge">승인 예외: {row.permissionReasonText || row.permissionReasonCode}</div>}
+          {row.hasPermission && <div className="permission-badge">승인 예외: {row.permissionReasonText || row.permissionReasonCode} · {row.permissionPeriodIds?.map((id) => periods.find((period) => period.id === id)?.name ?? id).join(", ")}</div>}
           <div className="attendance-choice" aria-label={`${row.studentName} 출결`}><button type="button" className={status === "PRESENT" ? "active present" : ""} disabled={!editable || saving} onClick={() => chooseAttendance(row.studentId, false)}>출석</button><button type="button" className={status === "EXCUSED_ABSENCE" || status === "UNEXCUSED_ABSENCE" ? "active absent" : ""} disabled={!editable || saving} onClick={() => chooseAttendance(row.studentId, true)}>결석</button></div>
         </article>;
       })}
     </div>
+    {!loading && periodId && groupId && rows.length === 0 && <section className="empty-state"><h2>이 그룹에 표시할 활성 학생이 없습니다.</h2><p>학생, 자습 그룹 배정, 그룹 교시 상태를 확인하세요.</p></section>}
     {periodId && groupId && <footer className="self-study-save-bar"><span>{saving ? "저장 중..." : `미입력 ${unenteredCount}명`}</span><button type="button" disabled={!editable || saving || pendingCount === 0} onClick={() => void save()}>{saving ? "저장 중..." : `저장${pendingCount ? ` (${pendingCount})` : ""}`}</button></footer>}
   </section>;
 }

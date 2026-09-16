@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { makeSelfStudyAttendanceRecordId, makeSelfStudyGroupPeriodId, makeSelfStudyMembershipId, makeSelfStudyPermissionId, makeSupervisionAssignmentId } from "../domain/ids";
-import { SELF_STUDY_ATTENDANCE_LABELS, buildBulkPresentDraft, buildSelfStudyAttendanceRows, canUseExcusedAbsence, countUnenteredSelfStudyAttendance, resolveSelfStudyAttendanceDisplayStatus, resolveSelfStudyAttendanceStatus } from "../domain/selfStudyOperation";
+import { SELF_STUDY_ATTENDANCE_LABELS, buildBulkPresentDraft, buildSelfStudyAttendanceRows, canUseExcusedAbsence, countUnenteredSelfStudyAttendance, isSelfStudySupervisorEditable, resolveSelfStudyAttendanceDisplayStatus, resolveSelfStudyAttendanceStatus, selectInitialSelfStudyGroupId } from "../domain/selfStudyOperation";
 import { buildSelfStudyGroup, buildSelfStudyGroupPeriod, buildSelfStudyMembership, buildSelfStudyPermission, buildSupervisionAssignment, supervisedGroupIdsForTeacher } from "../services/selfStudyOperations";
 import { buildSelfStudyAttendanceRecord } from "../services/selfStudyAttendance";
 import type { SelfStudyPermission } from "../types/domain";
@@ -105,5 +105,17 @@ describe("self-study operation domain", () => {
     const draft = buildBulkPresentDraft(rows, { draft: true });
     expect(draft).toEqual({ new: false, draft: true });
     expect(countUnenteredSelfStudyAttendance(rows, draft)).toBe(0);
+  });
+
+  it("auto-selects one eligible group and keeps a selected group only while it remains assigned", () => {
+    expect(selectInitialSelfStudyGroupId(["group-a"], "")).toBe("group-a");
+    expect(selectInitialSelfStudyGroupId(["group-a", "group-b"], "group-b")).toBe("group-b");
+    expect(selectInitialSelfStudyGroupId(["group-a"], "other-group")).toBe("group-a");
+  });
+
+  it("allows a supervisor only inside the configured edit window", () => {
+    const from = new Date("2026-09-18T18:00:00"); const until = new Date("2026-09-18T19:00:00");
+    expect(isSelfStudySupervisorEditable(from, until, new Date("2026-09-18T18:30:00"))).toBe(true);
+    expect(isSelfStudySupervisorEditable(from, until, new Date("2026-09-18T19:01:00"))).toBe(false);
   });
 });

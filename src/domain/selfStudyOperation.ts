@@ -43,6 +43,14 @@ export function buildBulkPresentDraft(rows: SelfStudyAttendanceReadRow[], drafts
   }, { ...drafts });
 }
 
+export function selectInitialSelfStudyGroupId(groupIds: string[], currentGroupId: string): string {
+  return groupIds.includes(currentGroupId) ? currentGroupId : groupIds[0] ?? "";
+}
+
+export function isSelfStudySupervisorEditable(editableFrom: Date | null, editableUntil: Date | null, now = new Date()): boolean {
+  return Boolean(editableFrom && editableUntil && now >= editableFrom && now <= editableUntil);
+}
+
 /** UI-independent input model for the later current-period attendance screen. */
 export function buildSelfStudyAttendanceRows(students: ScopedStudent[], memberships: SelfStudyMembership[], permissions: SelfStudyPermission[]): SelfStudyAttendanceRow[] {
   const membershipByStudent = new Map(memberships.filter((item) => item.active).map((item) => [item.studentId, item]));
