@@ -1,10 +1,10 @@
-import { collection, doc, getDocs, orderBy, query, serverTimestamp, Timestamp, where, writeBatch } from "firebase/firestore";
+import { Timestamp, writeBatch } from "firebase/firestore";
 import type { DutyPeriodImportRow } from "../lib/excel";
 import { makeDutyAssignmentId } from "../domain/ids";
 import { db } from "../lib/firebase";
 import type { AppUser, DutyAssignment, DutyPeriodAssignment } from "../types/domain";
 import { appendAuditLog, type AuditActor } from "./audit";
-import { assertDutyV2DayWritable, deleteDutyV2PeriodInBatch, readDutyV2Assignment, writeDutyV2PeriodInBatch } from "./dutyV2Repository";
+import { assertDutyV2BulkOperationLimit, assertDutyV2DayWritable, deleteDutyV2PeriodInBatch, listDutyV2Assignments, readDutyV2Assignment, writeDutyV2DayInBatch, writeDutyV2PeriodChildInBatch, writeDutyV2PeriodInBatch } from "./dutyV2Repository";
 import { assertScopedSelfStudyDate } from "./scopedExceptions";
 import { getScopedPeriod, type ScopedPeriod } from "./scopedPeriods";
 import { getAssignment, listAssignmentsForGrade } from "./staffAssignments";
@@ -20,6 +20,13 @@ export interface ScopedDutyImportPreview extends DutyScope { rows: DutyPeriodImp
 function dutyWindow(date: string) {
   const from = new Date(`${date}T00:00:00+09:00`);
   return { editableFrom: Timestamp.fromDate(from), editableUntil: Timestamp.fromMillis(from.getTime() + 24 * 60 * 60 * 1000 - 1) };
+}
+
+function assertValidDutyDate(date: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!match) throw new Error("담당교사 날짜는 YYYY-MM-DD 형식이어야 합니다.");
+  const parsed = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  if (parsed.getUTCFullYear() !== Number(match[1]) || parsed.getUTCMonth() !== Number(match[2]) - 1 || parsed.getUTCDate() !== Number(match[3])) throw new Error("유효하지 않은 담당교사 날짜입니다.");
 }
 
 function validateScope(scope: DutyScope) {
@@ -49,8 +56,7 @@ export async function getScopedDutyAssignment(academicYearId: string, gradeId: s
 
 export async function listScopedDutyAssignments(academicYearId: string, gradeId: string, range: DutyRange): Promise<ScopedDutyAssignment[]> {
   validateScope({ academicYearId, gradeId });
-  const snapshot = await getDocs(query(collection(db, "dutyAssignments"), where("academicYearId", "==", academicYearId), where("gradeId", "==", gradeId), where("date", ">=", range.start), where("date", "<=", range.end), orderBy("date")));
-  return snapshot.docs.map((item) => item.data() as ScopedDutyAssignment);
+  return listDutyV2Assignments({ academicYearId, gradeId }, range) as Promise<ScopedDutyAssignment[]>;
 }
 
 export async function savePeriodDutyAssignment(input: ScopedDutyInput, actor: AuditActor, before?: DutyPeriodAssignment | null) {
@@ -96,17 +102,32 @@ export function buildScopedDutyImportPreview(scope: DutyScope, rows: DutyPeriodI
 
 export async function bulkImportDutyAssignments(preview: ScopedDutyImportPreview, actor: AuditActor) {
   if (preview.rows.some((row) => row.error || !row.matchedUser)) throw new Error("오류를 해결한 후 적용해 주세요.");
+  const targets = new Set<string>();
+  for (const row of preview.rows) {
+    assertValidDutyDate(row.date);
+    const target = `${row.date}/${row.periodId}`;
+    if (targets.has(target)) throw new Error("같은 날짜와 교시의 담당교사 행이 중복되었습니다.");
+    targets.add(target);
+  }
   await Promise.all(preview.rows.map((row) => Promise.all([
     assertScopedSelfStudyDate(preview.academicYearId, preview.gradeId, row.date),
     validateTeacher({ ...preview, date: row.date, periodId: row.periodId, teacherUid: row.matchedUser!.uid, teacherName: row.matchedUser!.displayName }),
     validatePeriod({ ...preview, date: row.date, periodId: row.periodId, teacherUid: row.matchedUser!.uid, teacherName: row.matchedUser!.displayName }),
   ])));
+  const dates = [...new Set(preview.rows.map((row) => row.date))];
+  await Promise.all(dates.map((date) => assertDutyV2DayWritable({ academicYearId: preview.academicYearId, gradeId: preview.gradeId, date })));
+  assertDutyV2BulkOperationLimit(preview.rows.length, dates.length);
   const batch = writeBatch(db);
-  for (const row of preview.rows) {
-    const id = makeDutyAssignmentId(preview.gradeId, row.date);
-    batch.set(doc(db, "dutyAssignments", id), { academicYearId: preview.academicYearId, gradeId: preview.gradeId, date: row.date, periods: { [row.periodId]: { teacherUid: row.matchedUser!.uid, teacherName: row.matchedUser!.displayName, teacherEmail: row.matchedUser!.email, ...dutyWindow(row.date) } }, source: "excel", updatedBy: actor.uid, updatedAt: serverTimestamp() }, { merge: true });
+  for (const date of dates) {
+    writeDutyV2DayInBatch(batch, { academicYearId: preview.academicYearId, gradeId: preview.gradeId, date });
   }
-  appendAuditLog(batch, { actor, action: "DUTY_IMPORT_APPLIED", targetType: "duty_assignment_import", targetId: crypto.randomUUID(), after: { count: preview.rows.length }, source: "excel", batchId: crypto.randomUUID(), batchSize: preview.rows.length, academicYearId: preview.academicYearId, gradeId: preview.gradeId });
+  for (const row of preview.rows) {
+    const window = dutyWindow(row.date);
+    if (window.editableFrom.toMillis() >= window.editableUntil.toMillis()) throw new Error("담당교사 수정 가능 시간이 올바르지 않습니다.");
+    writeDutyV2PeriodChildInBatch(batch, { academicYearId: preview.academicYearId, gradeId: preview.gradeId, date: row.date, periodId: row.periodId, teacherUid: row.matchedUser!.uid, teacherName: row.matchedUser!.displayName, teacherEmail: row.matchedUser!.email, ...window });
+  }
+  const sortedDates = [...dates].sort();
+  appendAuditLog(batch, { actor, action: "DUTY_IMPORT_APPLIED", targetType: "duty_assignment_import", targetId: crypto.randomUUID(), after: { count: preview.rows.length, periodCount: preview.rows.length, dateRange: { start: sortedDates[0], end: sortedDates.at(-1) } }, source: "excel", batchId: crypto.randomUUID(), batchSize: preview.rows.length, academicYearId: preview.academicYearId, gradeId: preview.gradeId });
   await batch.commit();
 }
 

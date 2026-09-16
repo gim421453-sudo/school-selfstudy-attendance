@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deleteDutyV2PeriodInBatch, dutyV2DayId, dutyV2DayPayload, dutyV2PeriodPayload, reconstructDutyV2Assignment, writeDutyV2PeriodInBatch, type DutyV2Day, type DutyV2Period } from "../services/dutyV2Repository";
+import { FIRESTORE_BATCH_WRITE_LIMIT, assertDutyV2BulkOperationLimit, countDutyV2BulkOperations, deleteDutyV2PeriodInBatch, dutyV2DayId, dutyV2DayPayload, dutyV2PeriodPayload, omitEmptyDutyV2Assignments, reconstructDutyV2Assignment, selectDutyV2Days, writeDutyV2DayInBatch, writeDutyV2PeriodChildInBatch, writeDutyV2PeriodInBatch, type DutyV2Day, type DutyV2Period } from "../services/dutyV2Repository";
 import type { WriteBatch } from "firebase/firestore";
 
 const day: DutyV2Day = { academicYearId: "2026", gradeId: "2026-2", date: "2026-09-16", schemaVersion: 2 };
@@ -58,5 +58,39 @@ describe("Duty V2 repository contract", () => {
     expect(calls[0].data?.periods).toBeUndefined();
     expect(calls[1].data).toMatchObject({ ...periods[0], periodId: "p1" });
     expect(calls[2].operation).toBe("delete");
+  });
+
+  it("selects only in-range V2 parents and omits empty parent containers", () => {
+    const selected = selectDutyV2Days([
+      day,
+      { ...day, date: "2026-09-17" },
+      { ...day, gradeId: "2026-1" },
+      { ...day, academicYearId: "2027" },
+      { ...day, date: "2026-09-18", schemaVersion: 1 } as unknown as DutyV2Day,
+    ], { academicYearId: "2026", gradeId: "2026-2" }, { start: "2026-09-16", end: "2026-09-17" });
+    expect(selected.map((value) => value.date)).toEqual(["2026-09-16", "2026-09-17"]);
+    expect(omitEmptyDutyV2Assignments([reconstructDutyV2Assignment(day, periods), reconstructDutyV2Assignment({ ...day, date: "2026-09-17" }, [])])).toHaveLength(1);
+  });
+
+  it("counts distinct parent, child, and audit operations before bulk import", () => {
+    expect(countDutyV2BulkOperations(3, 2)).toBe(6);
+    expect(() => assertDutyV2BulkOperationLimit(FIRESTORE_BATCH_WRITE_LIMIT - 1, 0)).not.toThrow();
+    expect(() => assertDutyV2BulkOperationLimit(FIRESTORE_BATCH_WRITE_LIMIT, 0)).toThrow(String(FIRESTORE_BATCH_WRITE_LIMIT));
+  });
+
+  it("writes each bulk parent once and each period as a child", () => {
+    const calls: Array<{ operation: string; data?: Record<string, unknown> }> = [];
+    const batch = {
+      set: (_ref: unknown, data: Record<string, unknown>) => {
+        calls.push({ operation: "set", data });
+        return batch;
+      },
+    } as unknown as WriteBatch;
+    writeDutyV2DayInBatch(batch, day);
+    writeDutyV2PeriodChildInBatch(batch, periods[0]);
+    writeDutyV2PeriodChildInBatch(batch, periods[1]);
+    expect(calls).toHaveLength(3);
+    expect(calls[0].data?.periods).toBeUndefined();
+    expect(calls.slice(1).map((call) => call.data?.periodId)).toEqual(["p1", "p2"]);
   });
 });
