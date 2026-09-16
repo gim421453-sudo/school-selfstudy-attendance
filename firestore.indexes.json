@@ -71,6 +71,25 @@
         { "fieldPath": "classId", "order": "ASCENDING" }
       ]
     }
+    ,{
+      "collectionGroup": "records",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "academicYearId", "order": "ASCENDING" },
+        { "fieldPath": "gradeId", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "records",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "academicYearId", "order": "ASCENDING" },
+        { "fieldPath": "gradeId", "order": "ASCENDING" },
+        { "fieldPath": "classId", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "ASCENDING" }
+      ]
+    }
   ],
   "fieldOverrides": []
 }

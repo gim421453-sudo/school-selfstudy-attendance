@@ -27,3 +27,11 @@ export function makeDutyAssignmentId(gradeId: string, date: string): string {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)) throw new Error("날짜는 YYYY-MM-DD 형식이어야 합니다.");
   return `${grade}_${normalizedDate}`;
 }
+
+export function makeAttendanceDayId(gradeId: string, date: string): string {
+  return makeDutyAssignmentId(gradeId, date);
+}
+
+export function makeAttendanceRecordId(classId: string, periodId: string, studentId: string): string {
+  return `${assertIdPart(classId, "반")}__${assertIdPart(periodId, "교시")}__${assertIdPart(studentId, "학생")}`;
+}
