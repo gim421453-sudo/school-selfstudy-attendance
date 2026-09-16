@@ -21,6 +21,14 @@ export function makeStaffAssignmentId(academicYearId: string, gradeId: string, u
   return `${year}_${grade}_${user}`;
 }
 
+export function makeSelfStudyGroupPeriodId(groupId: string, periodId: string): string {
+  return `${assertIdPart(groupId, "group")}_${assertIdPart(periodId, "period")}`;
+}
+
+export function makeSelfStudyMembershipId(academicYearId: string, gradeId: string, studentId: string): string {
+  return `${assertIdPart(academicYearId, "academic year")}_${assertIdPart(gradeId, "grade")}_${assertIdPart(studentId, "student")}`;
+}
+
 export function makeDutyAssignmentId(gradeId: string, date: string): string {
   const grade = assertIdPart(gradeId, "학년");
   const normalizedDate = assertIdPart(date, "날짜");
@@ -30,6 +38,14 @@ export function makeDutyAssignmentId(gradeId: string, date: string): string {
 
 export function makeAttendanceDayId(gradeId: string, date: string): string {
   return makeDutyAssignmentId(gradeId, date);
+}
+
+export function makeSupervisionAssignmentId(gradeId: string, date: string, periodId: string, groupId: string, teacherUid: string): string {
+  return `${makeDutyAssignmentId(gradeId, date)}_${assertIdPart(periodId, "period")}_${assertIdPart(groupId, "group")}_${assertIdPart(teacherUid, "teacher")}`;
+}
+
+export function makeSelfStudyPermissionId(academicYearId: string, gradeId: string, studentId: string, date: string): string {
+  return `${assertIdPart(academicYearId, "academic year")}_${makeDutyAssignmentId(gradeId, date)}_${assertIdPart(studentId, "student")}`;
 }
 
 export function makeAttendanceRecordId(classId: string, periodId: string, studentId: string): string {

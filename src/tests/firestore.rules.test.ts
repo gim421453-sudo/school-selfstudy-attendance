@@ -363,6 +363,47 @@ suite("Firestore security rules", () => {
     await assertSucceeds(setDoc(doc(ownerDb, "settings", "operations"), { ...operations("NORMAL"), updatedBy: "owner", updatedAt: serverTimestamp() }));
   });
 
+  it("enforces self-study operation scope, supervision, and homeroom permissions", async () => {
+    const scope = { academicYearId: "2026", gradeId: "operation-grade" };
+    const group = { ...scope, displayName: "Regular", type: "REGULAR", active: true, sortOrder: 1, updatedAt: serverTimestamp() };
+    const period = { ...scope, name: "P1", order: 1, startTime: "18:00", endTime: "18:50", active: true };
+    const membership = { ...scope, studentId: "operation-student", classId: "operation-class", selfStudyGroupId: "operation-group", active: true, updatedAt: serverTimestamp() };
+    const supervision = { ...scope, date: "2026-09-16", periodId: "operation-period", selfStudyGroupId: "operation-group", teacherUid: "operation-teacher", teacherDisplayName: "Teacher", active: true, updatedAt: serverTimestamp() };
+    const permission = { ...scope, classId: "operation-class", studentId: "operation-student", date: "2026-09-16", periodIds: ["operation-period"], reasonCode: "MEDICAL", reasonText: "Clinic", active: true, approvedByUid: "operation-home", approvedAt: serverTimestamp(), updatedAt: serverTimestamp() };
+    await env.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await Promise.all([
+        setDoc(doc(db, "users", "operation-teacher"), user("operation-teacher", ["teacher"], { globalRoles: ["teacher"] })),
+        setDoc(doc(db, "users", "operation-admin"), user("operation-admin", ["teacher"], { globalRoles: ["teacher"] })),
+        setDoc(doc(db, "users", "operation-home"), user("operation-home", ["teacher"], { globalRoles: ["teacher"] })),
+        setDoc(doc(db, "grades", "operation-grade"), { academicYearId: "2026", gradeNumber: 1, displayName: "1", active: true }),
+        setDoc(doc(db, "staffAssignments", "2026_operation-grade_operation-teacher"), { ...scope, uid: "operation-teacher", role: "teacher", active: true }),
+        setDoc(doc(db, "staffAssignments", "2026_operation-grade_operation-admin"), { ...scope, uid: "operation-admin", role: "grade_admin", active: true }),
+        setDoc(doc(db, "staffAssignments", "2026_operation-grade_operation-home"), { ...scope, uid: "operation-home", role: "teacher", active: true }),
+        setDoc(doc(db, "classes", "operation-class"), { ...scope, classNumber: 1, displayName: "1-1", active: true, homeroomTeacherUid: "operation-home" }),
+        setDoc(doc(db, "students", "operation-student"), { ...scope, classId: "operation-class", studentNo: 1, name: "Student", active: true }),
+        setDoc(doc(db, "periods", "operation-period"), period),
+        setDoc(doc(db, "selfStudyGroups", "operation-group"), group),
+      ]);
+    });
+    const ownerDb = env.authenticatedContext("owner").firestore();
+    const teacherDb = env.authenticatedContext("operation-teacher").firestore();
+    const adminDb = env.authenticatedContext("operation-admin").firestore();
+    const homeDb = env.authenticatedContext("operation-home").firestore();
+    await assertSucceeds(setDoc(doc(ownerDb, "selfStudyGroupPeriods", "operation-group_operation-period"), { ...scope, groupId: "operation-group", periodId: "operation-period", active: true, updatedAt: serverTimestamp() }));
+    await assertSucceeds(setDoc(doc(adminDb, "selfStudyMemberships", "2026_operation-grade_operation-student"), membership));
+    await assertFails(setDoc(doc(teacherDb, "selfStudyMemberships", "2026_operation-grade_operation-student"), membership));
+    await assertSucceeds(setDoc(doc(adminDb, "supervisionAssignments", "operation-grade_2026-09-16_operation-period_operation-group_operation-teacher"), supervision));
+    await assertSucceeds(getDocs(query(collection(teacherDb, "supervisionAssignments"), where("academicYearId", "==", "2026"), where("gradeId", "==", "operation-grade"), where("date", "==", "2026-09-16"), where("periodId", "==", "operation-period"), where("teacherUid", "==", "operation-teacher"))));
+    await assertFails(getDocs(query(collection(teacherDb, "supervisionAssignments"), where("academicYearId", "==", "2026"), where("gradeId", "==", "operation-grade"))));
+    await assertSucceeds(setDoc(doc(homeDb, "selfStudyPermissions", "2026_operation-grade_2026-09-16_operation-student"), permission));
+    await assertFails(setDoc(doc(teacherDb, "selfStudyPermissions", "2026_operation-grade_2026-09-16_operation-student"), { ...permission, approvedByUid: "operation-teacher" }));
+    await assertFails(setDoc(doc(adminDb, "selfStudyPermissions", "2026_operation-grade_2026-09-16_operation-student"), { ...permission, approvedByUid: "operation-admin" }));
+    await assertSucceeds(getDoc(doc(homeDb, "selfStudyMemberships", "2026_operation-grade_operation-student")));
+    await assertFails(getDocs(collection(teacherDb, "users")));
+    await assertFails(setDoc(doc(ownerDb, "selfStudyGroups", "wrong-scope"), { ...group, gradeId: "missing-grade" }));
+  });
+
   it("validates optional StaffAssignment displayName projections without changing authority", async () => {
     await env.withSecurityRulesDisabled(async (context) => {
       const db = context.firestore();

@@ -172,6 +172,77 @@ export interface AttendanceRecord {
   updatedAt: unknown;
 }
 
+/** D3 attendance uses this separate, intentionally narrower operation status set. */
+export type SelfStudyAttendanceStatus = "PRESENT" | "EXCUSED_ABSENCE" | "UNEXCUSED_ABSENCE";
+
+export type SelfStudyGroupType = "REGULAR" | "READING";
+
+export interface SelfStudyGroup extends Scope {
+  id: string;
+  displayName: string;
+  type: SelfStudyGroupType;
+  active: boolean;
+  sortOrder: number;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
+
+/** An enabled edge between a scoped self-study group and a grade-level period. */
+export interface SelfStudyGroupPeriod extends Scope {
+  id: string;
+  groupId: string;
+  periodId: string;
+  active: boolean;
+  updatedAt?: unknown;
+}
+
+/** Class enrolment remains authoritative; this only records the self-study grouping. */
+export interface SelfStudyMembership extends Scope {
+  id: string;
+  studentId: string;
+  classId: string;
+  selfStudyGroupId: string;
+  active: boolean;
+  updatedAt?: unknown;
+}
+
+/** A teacher-to-group-to-period edge. Multiple edges can exist for a group and period. */
+export interface SupervisionAssignment extends Scope {
+  id: string;
+  date: string;
+  periodId: string;
+  selfStudyGroupId: string;
+  teacherUid: string;
+  teacherDisplayName: string;
+  active: boolean;
+  updatedAt?: unknown;
+}
+
+export type SelfStudyPermissionReasonCode = "ACADEMY" | "MEDICAL" | "FAMILY" | "SCHOOL_ACTIVITY" | "OTHER";
+
+export interface SelfStudyPermission extends Scope {
+  id: string;
+  classId: string;
+  studentId: string;
+  date: string;
+  periodIds: string[];
+  reasonCode: SelfStudyPermissionReasonCode;
+  reasonText: string;
+  active: boolean;
+  approvedByUid: string;
+  approvedAt?: unknown;
+  updatedAt?: unknown;
+}
+
+export interface SelfStudyAttendanceRow {
+  studentId: string;
+  studentName: string;
+  classId: string;
+  selfStudyGroupId: string | null;
+  permission: Pick<SelfStudyPermission, "reasonCode" | "reasonText" | "periodIds"> | null;
+  status: SelfStudyAttendanceStatus | null;
+}
+
 export interface AccessSettings {
   statsVisibility: "grade_admin_only" | "grade_admin_and_homeroom";
   homeroomStatsScope: "own_class" | "grade";
