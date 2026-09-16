@@ -384,6 +384,11 @@ suite("Firestore security rules", () => {
         setDoc(doc(db, "students", "operation-student"), { ...scope, classId: "operation-class", studentNo: 1, name: "Student", active: true }),
         setDoc(doc(db, "periods", "operation-period"), period),
         setDoc(doc(db, "selfStudyGroups", "operation-group"), group),
+        setDoc(doc(db, "selfStudyGroups", "operation-inactive-group"), { ...group, active: false }),
+        setDoc(doc(db, "selfStudyGroups", "operation-no-edge-group"), { ...group, displayName: "No edge" }),
+        setDoc(doc(db, "periods", "operation-inactive-period"), { ...period, active: false }),
+        setDoc(doc(db, "selfStudyGroupPeriods", "operation-inactive-group_operation-period"), { ...scope, groupId: "operation-inactive-group", periodId: "operation-period", active: true, updatedAt: serverTimestamp() }),
+        setDoc(doc(db, "selfStudyGroupPeriods", "operation-group_operation-inactive-period"), { ...scope, groupId: "operation-group", periodId: "operation-inactive-period", active: true, updatedAt: serverTimestamp() }),
       ]);
     });
     const ownerDb = env.authenticatedContext("owner").firestore();
@@ -394,6 +399,9 @@ suite("Firestore security rules", () => {
     await assertSucceeds(setDoc(doc(adminDb, "selfStudyMemberships", "2026_operation-grade_operation-student"), membership));
     await assertFails(setDoc(doc(teacherDb, "selfStudyMemberships", "2026_operation-grade_operation-student"), membership));
     await assertSucceeds(setDoc(doc(adminDb, "supervisionAssignments", "operation-grade_2026-09-16_operation-period_operation-group_operation-teacher"), supervision));
+    await assertFails(setDoc(doc(adminDb, "supervisionAssignments", "operation-grade_2026-09-16_operation-period_operation-inactive-group_operation-teacher"), { ...supervision, selfStudyGroupId: "operation-inactive-group" }));
+    await assertFails(setDoc(doc(adminDb, "supervisionAssignments", "operation-grade_2026-09-16_operation-inactive-period_operation-group_operation-teacher"), { ...supervision, periodId: "operation-inactive-period" }));
+    await assertFails(setDoc(doc(adminDb, "supervisionAssignments", "operation-grade_2026-09-16_operation-period_operation-no-edge-group_operation-teacher"), { ...supervision, selfStudyGroupId: "operation-no-edge-group" }));
     await assertSucceeds(getDocs(query(collection(teacherDb, "supervisionAssignments"), where("academicYearId", "==", "2026"), where("gradeId", "==", "operation-grade"), where("date", "==", "2026-09-16"), where("periodId", "==", "operation-period"), where("teacherUid", "==", "operation-teacher"))));
     await assertFails(getDocs(query(collection(teacherDb, "supervisionAssignments"), where("academicYearId", "==", "2026"), where("gradeId", "==", "operation-grade"))));
     await assertSucceeds(setDoc(doc(homeDb, "selfStudyPermissions", "2026_operation-grade_2026-09-16_operation-student"), permission));

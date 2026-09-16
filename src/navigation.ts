@@ -7,6 +7,7 @@ export const navigationItems: NavigationItem[] = [
   { to: "/students", label: "학생 명부", gradeAdmin: true }, { to: "/classes", label: "반/담임 관리", gradeAdmin: true }, { to: "/periods", label: "자습 교시 관리", gradeAdmin: true },
   { to: "/stats", label: "출결 통계", gradeAdmin: true }, { to: "/audit", label: "감사 기록", gradeAdmin: true }, { to: "/admin", label: "전체 관리", ownerOnly: true },
   { to: "/self-study-groups", label: "자습 운영 관리", gradeAdmin: true },
+  { to: "/supervision", label: "감독교사 배정", gradeAdmin: true },
 ];
 export function visibleNavigation(user: AppUser | null, assignments: StaffAssignment[], scope: { academicYearId: string; gradeId: string | null } | null, classes: ClassRoom[] = []) {
   if (!user || !scope) return [];

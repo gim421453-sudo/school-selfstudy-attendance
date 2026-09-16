@@ -1,5 +1,5 @@
 import { collection, doc, getDoc, getDocs, orderBy, query, serverTimestamp, where, writeBatch } from "firebase/firestore";
-import { makeSelfStudyGroupPeriodId, makeSelfStudyMembershipId, makeSelfStudyPermissionId, makeSupervisionAssignmentId } from "../domain/ids";
+import { makeSelfStudyGroupPeriodId, makeSelfStudyMembershipId, makeSelfStudyPermissionId, makeStaffAssignmentId, makeSupervisionAssignmentId } from "../domain/ids";
 import { db } from "../lib/firebase";
 import type { SelfStudyGroup, SelfStudyGroupPeriod, SelfStudyMembership, SelfStudyPermission, SupervisionAssignment } from "../types/domain";
 import { appendAuditLog, type AuditActor } from "./audit";
@@ -113,8 +113,28 @@ export async function listSupervisionAssignmentsForTeacher(scope: SelfStudyScope
   return listSupervisionAssignments(scope, { teacherUid, date, periodId });
 }
 
+/** D3B can use this scoped result without reading the users collection. */
+export function supervisedGroupIdsForTeacher(assignments: SupervisionAssignment[], teacherUid: string, date: string, periodId: string) {
+  return [...new Set(assignments.filter((assignment) => assignment.active && assignment.teacherUid === teacherUid && assignment.date === date && assignment.periodId === periodId).map((assignment) => assignment.selfStudyGroupId))];
+}
+
+async function validateActiveSupervisionReferences(value: Omit<SupervisionAssignment, "id" | "updatedAt">) {
+  const [group, period, groupPeriod, staff] = await Promise.all([
+    getDoc(doc(db, "selfStudyGroups", value.selfStudyGroupId)),
+    getDoc(doc(db, "periods", value.periodId)),
+    getDoc(doc(db, "selfStudyGroupPeriods", makeSelfStudyGroupPeriodId(value.selfStudyGroupId, value.periodId))),
+    getDoc(doc(db, "staffAssignments", makeStaffAssignmentId(value.academicYearId, value.gradeId, value.teacherUid))),
+  ]);
+  const inScope = (snapshot: typeof group) => snapshot.exists() && snapshot.data().academicYearId === value.academicYearId && snapshot.data().gradeId === value.gradeId;
+  if (!inScope(group) || group.data()?.active !== true) throw new Error("활성 자습 그룹이 필요합니다.");
+  if (!inScope(period) || period.data()?.active !== true) throw new Error("활성 자습 교시가 필요합니다.");
+  if (!inScope(groupPeriod) || groupPeriod.data()?.groupId !== value.selfStudyGroupId || groupPeriod.data()?.periodId !== value.periodId || groupPeriod.data()?.active !== true) throw new Error("해당 자습 그룹은 이 교시에 운영되지 않습니다.");
+  if (!inScope(staff) || staff.data()?.uid !== value.teacherUid || staff.data()?.active !== true || !["teacher", "grade_admin"].includes(staff.data()?.role)) throw new Error("해당 학년의 활성 교직원 배정이 필요합니다.");
+}
+
 export async function saveSupervisionAssignment(value: Omit<SupervisionAssignment, "id" | "updatedAt">, actor: AuditActor, before?: SupervisionAssignment | null) {
   const next = buildSupervisionAssignment(value);
+  await validateActiveSupervisionReferences(next);
   const id = makeSupervisionAssignmentId(next.gradeId, next.date, next.periodId, next.selfStudyGroupId, next.teacherUid);
   const batch = writeBatch(db);
   batch.set(doc(db, "supervisionAssignments", id), { ...next, updatedAt: serverTimestamp() }, { merge: true });

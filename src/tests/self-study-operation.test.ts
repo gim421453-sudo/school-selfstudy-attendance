@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { makeSelfStudyGroupPeriodId, makeSelfStudyMembershipId, makeSelfStudyPermissionId, makeSupervisionAssignmentId } from "../domain/ids";
 import { SELF_STUDY_ATTENDANCE_LABELS, buildSelfStudyAttendanceRows, canUseExcusedAbsence } from "../domain/selfStudyOperation";
-import { buildSelfStudyGroup, buildSelfStudyGroupPeriod, buildSelfStudyMembership, buildSelfStudyPermission, buildSupervisionAssignment } from "../services/selfStudyOperations";
+import { buildSelfStudyGroup, buildSelfStudyGroupPeriod, buildSelfStudyMembership, buildSelfStudyPermission, buildSupervisionAssignment, supervisedGroupIdsForTeacher } from "../services/selfStudyOperations";
 import type { SelfStudyPermission } from "../types/domain";
 
 const scope = { academicYearId: "2026", gradeId: "2026-1" };
@@ -34,6 +34,17 @@ describe("self-study operation domain", () => {
     const second = buildSupervisionAssignment({ ...scope, date: "2026-09-16", periodId: "p1", selfStudyGroupId: "group-a", teacherUid: "teacher-b", teacherDisplayName: "Teacher B", active: true });
     const third = buildSupervisionAssignment({ ...scope, date: "2026-09-16", periodId: "p1", selfStudyGroupId: "group-b", teacherUid: "teacher-a", teacherDisplayName: "Teacher A", active: true });
     expect(new Set([makeSupervisionAssignmentId(first.gradeId, first.date, first.periodId, first.selfStudyGroupId, first.teacherUid), makeSupervisionAssignmentId(second.gradeId, second.date, second.periodId, second.selfStudyGroupId, second.teacherUid), makeSupervisionAssignmentId(third.gradeId, third.date, third.periodId, third.selfStudyGroupId, third.teacherUid)]).size).toBe(3);
+  });
+
+  it("prepares only a supervisor's active groups for one date and period", () => {
+    const assignments = [
+      { id: "a", ...scope, date: "2026-09-16", periodId: "p1", selfStudyGroupId: "group-a", teacherUid: "teacher-a", teacherDisplayName: "Teacher A", active: true },
+      { id: "b", ...scope, date: "2026-09-16", periodId: "p1", selfStudyGroupId: "group-b", teacherUid: "teacher-a", teacherDisplayName: "Teacher A", active: true },
+      { id: "c", ...scope, date: "2026-09-16", periodId: "p1", selfStudyGroupId: "group-c", teacherUid: "teacher-b", teacherDisplayName: "Teacher B", active: true },
+      { id: "d", ...scope, date: "2026-09-16", periodId: "p2", selfStudyGroupId: "group-d", teacherUid: "teacher-a", teacherDisplayName: "Teacher A", active: true },
+      { id: "e", ...scope, date: "2026-09-16", periodId: "p1", selfStudyGroupId: "group-e", teacherUid: "teacher-a", teacherDisplayName: "Teacher A", active: false },
+    ];
+    expect(supervisedGroupIdsForTeacher(assignments, "teacher-a", "2026-09-16", "p1")).toEqual(["group-a", "group-b"]);
   });
 
   it("keeps permissions scoped to a class/student/date and requires a matching period", () => {
