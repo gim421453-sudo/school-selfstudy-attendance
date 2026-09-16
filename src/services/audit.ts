@@ -21,6 +21,8 @@ export interface AuditEvent {
   gradeId?: string;
   classId?: string;
   studentId?: string;
+  periodId?: string;
+  dutyDate?: string;
 }
 
 export function auditEventData(event: AuditEvent) {
@@ -39,6 +41,8 @@ export function auditEventData(event: AuditEvent) {
     ...(event.gradeId ? { gradeId: event.gradeId } : {}),
     ...(event.classId ? { classId: event.classId } : {}),
     ...(event.studentId ? { studentId: event.studentId } : {}),
+    ...(event.periodId ? { periodId: event.periodId } : {}),
+    ...(event.dutyDate ? { dutyDate: event.dutyDate } : {}),
     timestamp: serverTimestamp(),
   };
 }

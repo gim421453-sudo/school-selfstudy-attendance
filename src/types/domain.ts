@@ -152,7 +152,7 @@ export interface SelfStudyException {
   reason: string;
   /** New scoped field. enabled is retained for legacy v0.6 documents. */
   active?: boolean;
-  enabled: boolean;
+  enabled?: boolean;
 }
 
 export interface AttendanceRecord {

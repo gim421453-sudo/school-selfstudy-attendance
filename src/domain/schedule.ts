@@ -13,6 +13,11 @@ export function isSelfStudyDate(date: string | Date, exception?: Pick<import("..
   return isSelfStudyDay(date) && !exception?.enabled;
 }
 
+/** The caller supplies only exceptions applicable to the selected year and grade. */
+export function isScopedSelfStudyDate(date: string | Date, exceptions: Array<Pick<import("../types/domain").SelfStudyException, "active" | "enabled">>): boolean {
+  return isSelfStudyDay(date) && !exceptions.some((exception) => exception.active === true || (exception.active === undefined && exception.enabled === true));
+}
+
 export function assertSelfStudyDay(date: string): void {
   if (!isSelfStudyDay(date)) throw new Error(SUNDAY_SELF_STUDY_MESSAGE);
 }

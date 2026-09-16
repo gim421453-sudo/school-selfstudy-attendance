@@ -20,3 +20,10 @@ export function makeStaffAssignmentId(academicYearId: string, gradeId: string, u
   const user = assertIdPart(uid, "교직원");
   return `${year}_${grade}_${user}`;
 }
+
+export function makeDutyAssignmentId(gradeId: string, date: string): string {
+  const grade = assertIdPart(gradeId, "학년");
+  const normalizedDate = assertIdPart(date, "날짜");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)) throw new Error("날짜는 YYYY-MM-DD 형식이어야 합니다.");
+  return `${grade}_${normalizedDate}`;
+}
