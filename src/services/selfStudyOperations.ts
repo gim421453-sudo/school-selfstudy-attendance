@@ -66,7 +66,7 @@ export async function saveSelfStudyGroupPeriod(value: Omit<SelfStudyGroupPeriod,
   const id = makeSelfStudyGroupPeriodId(next.groupId, next.periodId);
   const batch = writeBatch(db);
   batch.set(doc(db, "selfStudyGroupPeriods", id), { ...next, updatedAt: serverTimestamp() }, { merge: true });
-  appendAuditLog(batch, { actor, action: "SELF_STUDY_GROUP_UPDATED", targetType: "self_study_group_period", targetId: id, before: before ?? null, after: next, academicYearId: next.academicYearId, gradeId: next.gradeId, periodId: next.periodId });
+  appendAuditLog(batch, { actor, action: next.active ? "SELF_STUDY_GROUP_PERIOD_ADDED" : "SELF_STUDY_GROUP_PERIOD_REMOVED", targetType: "self_study_group_period", targetId: id, before: before ?? null, after: next, academicYearId: next.academicYearId, gradeId: next.gradeId, periodId: next.periodId });
   await batch.commit();
 }
 
@@ -89,7 +89,7 @@ export async function saveSelfStudyMembership(value: Omit<SelfStudyMembership, "
   const id = makeSelfStudyMembershipId(next.academicYearId, next.gradeId, next.studentId);
   const batch = writeBatch(db);
   batch.set(doc(db, "selfStudyMemberships", id), { ...next, updatedAt: serverTimestamp() }, { merge: true });
-  appendAuditLog(batch, { actor, action: before ? "SELF_STUDY_MEMBERSHIP_CHANGED" : "SELF_STUDY_MEMBERSHIP_ASSIGNED", targetType: "self_study_membership", targetId: id, before: before ?? null, after: next, academicYearId: next.academicYearId, gradeId: next.gradeId, classId: next.classId, studentId: next.studentId });
+  appendAuditLog(batch, { actor, action: !next.active ? "SELF_STUDY_MEMBERSHIP_DEACTIVATED" : before ? "SELF_STUDY_MEMBERSHIP_CHANGED" : "SELF_STUDY_MEMBERSHIP_ASSIGNED", targetType: "self_study_membership", targetId: id, before: before ?? null, after: next, academicYearId: next.academicYearId, gradeId: next.gradeId, classId: next.classId, studentId: next.studentId });
   await batch.commit();
 }
 

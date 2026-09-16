@@ -22,6 +22,13 @@ describe("self-study operation domain", () => {
     expect(makeSelfStudyMembershipId("2026", "2026-1", "student-1")).toBe("2026_2026-1_student-1");
   });
 
+  it("uses one deterministic active membership identity per student and keeps reading rooms in the same model", () => {
+    const regular = buildSelfStudyMembership({ ...scope, studentId: "student-1", classId: "class-1", selfStudyGroupId: "regular", active: true });
+    const reading = buildSelfStudyMembership({ ...scope, studentId: "student-1", classId: "class-1", selfStudyGroupId: "reading", active: true });
+    expect(makeSelfStudyMembershipId(scope.academicYearId, scope.gradeId, regular.studentId)).toBe(makeSelfStudyMembershipId(scope.academicYearId, scope.gradeId, reading.studentId));
+    expect(reading.selfStudyGroupId).toBe("reading");
+  });
+
   it("supports multiple teachers per group-period and multiple groups per teacher", () => {
     const first = buildSupervisionAssignment({ ...scope, date: "2026-09-16", periodId: "p1", selfStudyGroupId: "group-a", teacherUid: "teacher-a", teacherDisplayName: "Teacher A", active: true });
     const second = buildSupervisionAssignment({ ...scope, date: "2026-09-16", periodId: "p1", selfStudyGroupId: "group-a", teacherUid: "teacher-b", teacherDisplayName: "Teacher B", active: true });
