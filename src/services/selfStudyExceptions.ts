@@ -26,8 +26,13 @@ export async function listSelfStudyExceptions(scope?: SelfStudyExceptionScope): 
     const snap = await getDocs(query(collection(db, "selfStudyExceptions"), orderBy("date")));
     return snap.docs.map((item) => item.data() as SelfStudyException);
   }
-  const snap = await getDocs(query(collection(db, "selfStudyExceptions"), where("academicYearId", "==", scope.academicYearId), orderBy("date")));
-  return snap.docs.map((item) => item.data() as SelfStudyException).filter((item) => item.scopeType === "school" || item.gradeId === scope.gradeId);
+  const [school, grade] = await Promise.all([
+    getDocs(query(collection(db, "selfStudyExceptions"), where("academicYearId", "==", scope.academicYearId), where("scopeType", "==", "school"), where("gradeId", "==", null), orderBy("date"))),
+    getDocs(query(collection(db, "selfStudyExceptions"), where("academicYearId", "==", scope.academicYearId), where("scopeType", "==", "grade"), where("gradeId", "==", scope.gradeId), orderBy("date"))),
+  ]);
+  return [...school.docs, ...grade.docs]
+    .map((item) => item.data() as SelfStudyException)
+    .sort((left, right) => left.date.localeCompare(right.date));
 }
 
 export async function getApplicableSelfStudyExceptions(scope: SelfStudyExceptionScope, date: string, periodId?: string): Promise<SelfStudyException[]> {

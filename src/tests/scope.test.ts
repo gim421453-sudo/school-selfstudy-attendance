@@ -5,12 +5,15 @@ import {
   canViewClassStatistics,
   chooseInitialScope,
   chooseInitialSchoolScope,
+  currentAcademicYearInitializationError,
   exceptionAppliesToScope,
+  hasConcreteGradeScope,
   hasGradeAssignment,
   isGradeAdminForGrade,
   isScopeSelectable,
   isValidSchoolScope,
   isTeacherForGrade,
+  resolveSchoolScope,
 } from "../domain/scope";
 import { visibleNavigation } from "../navigation";
 import type { AcademicYear, AppUser, ClassRoom, Grade, StaffAssignment } from "../types/domain";
@@ -54,6 +57,23 @@ describe("annual grade scope", () => {
     expect(isValidSchoolScope(years, grades, assignments, teacher, { academicYearId: "2026", gradeId: "2026-2" })).toBe(true);
     expect(isValidSchoolScope(years, grades, assignments, teacher, { academicYearId: "2027", gradeId: "2026-2" })).toBe(false);
     expect(isValidSchoolScope(years, grades, assignments, teacher, { academicYearId: "2027", gradeId: "2027-1" })).toBe(true);
+  });
+
+  it("recovers an owner to the current academic year and all grades without a staff assignment", () => {
+    expect(resolveSchoolScope(years, grades, [], owner, { academicYearId: "2027", gradeId: "2027-1" })).toEqual({ academicYearId: "2026", gradeId: null });
+    expect(chooseInitialSchoolScope(years, grades, [], owner)).toEqual({ academicYearId: "2026", gradeId: null });
+  });
+
+  it("does not give an unassigned teacher the owner fallback", () => {
+    expect(resolveSchoolScope(years, grades, [], teacher, { academicYearId: "2026", gradeId: "2026-1" })).toBeNull();
+  });
+
+  it("requires exactly one active current academic year and keeps all-grade scope out of concrete-grade pages", () => {
+    expect(currentAcademicYearInitializationError(years)).toBeNull();
+    expect(currentAcademicYearInitializationError(years.map((year) => ({ ...year, isCurrent: false })))).toContain("지정되어 있지 않습니다");
+    expect(currentAcademicYearInitializationError(years.map((year) => ({ ...year, isCurrent: true })))).toContain("여러 개");
+    expect(hasConcreteGradeScope({ academicYearId: "2026", gradeId: null })).toBe(false);
+    expect(hasConcreteGradeScope({ academicYearId: "2026", gradeId: "2026-1" })).toBe(true);
   });
 
   it("keeps navigation limited to scoped roles", () => {

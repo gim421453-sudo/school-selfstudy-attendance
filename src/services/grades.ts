@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, getDocs, orderBy, query, where, writeBatch } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, query, where, writeBatch } from "firebase/firestore";
 import { makeGradeId } from "../domain/ids";
 import { db } from "../lib/firebase";
 import type { Grade } from "../types/domain";
@@ -11,8 +11,10 @@ function validateGrade(value: Grade) {
 }
 
 export async function listGrades(academicYearId: string): Promise<Grade[]> {
-  const snapshot = await getDocs(query(collection(db, "grades"), where("academicYearId", "==", academicYearId), orderBy("gradeNumber")));
-  return snapshot.docs.map((item) => ({ id: item.id, ...(item.data() as Omit<Grade, "id">) }));
+  const snapshot = await getDocs(query(collection(db, "grades"), where("academicYearId", "==", academicYearId)));
+  return snapshot.docs
+    .map((item) => ({ id: item.id, ...(item.data() as Omit<Grade, "id">) }))
+    .sort((left, right) => left.gradeNumber - right.gradeNumber);
 }
 
 export async function getGrade(gradeId: string): Promise<Grade | null> {

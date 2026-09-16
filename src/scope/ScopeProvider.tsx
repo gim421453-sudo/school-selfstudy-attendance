@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type PropsWithChildren } from "react";
 import { useAuth } from "../auth/AuthProvider";
-import { chooseInitialSchoolScope, filterGradesForYear, isValidSchoolScope, isSystemOwner } from "../domain/scope";
+import { currentAcademicYearInitializationError, filterGradesForYear, isSystemOwner, isValidSchoolScope, resolveSchoolScope } from "../domain/scope";
 import { listAcademicYears } from "../services/academicYears";
 import { listGrades } from "../services/grades";
 import { listAssignmentsForUser } from "../services/staffAssignments";
@@ -27,15 +27,17 @@ export function ScopeProvider({ children }: PropsWithChildren) {
     void (async () => {
       try {
         const nextYears = await listAcademicYears();
+        const currentYearError = currentAcademicYearInitializationError(nextYears);
+        if (currentYearError) throw new Error(currentYearError);
         const nextAssignments = isSystemOwner(appUser) ? [] : await Promise.all(nextYears.map((year) => listAssignmentsForUser(year.id, appUser.uid))).then((items) => items.flat());
         const allowedYears = isSystemOwner(appUser) ? nextYears : nextYears.filter((year) => nextAssignments.some((assignment) => assignment.academicYearId === year.id && assignment.active));
         const nextGrades = (await Promise.all(allowedYears.map((year) => listGrades(year.id)))).flat();
         if (!alive) return;
         const stored = readStoredScope();
-        const nextScope = isValidSchoolScope(nextYears, nextGrades, nextAssignments, appUser, stored) ? stored : chooseInitialSchoolScope(nextYears, nextGrades, nextAssignments, appUser);
+        const nextScope = resolveSchoolScope(nextYears, nextGrades, nextAssignments, appUser, stored);
         setYears(nextYears); setGrades(nextGrades); setAssignments(nextAssignments); setScopeState(nextScope);
         if (nextScope) localStorage.setItem(STORAGE_KEY, JSON.stringify(nextScope)); else localStorage.removeItem(STORAGE_KEY);
-      } catch { if (alive) setError("학년도 또는 학년 권한 정보를 불러오지 못했습니다."); }
+      } catch (caught) { if (alive) setError(caught instanceof Error ? caught.message : "학년도 또는 학년 권한 정보를 불러오지 못했습니다."); }
       finally { if (alive) setLoading(false); }
     })();
     return () => { alive = false; };

@@ -10,6 +10,20 @@ export function hasGlobalOwnerRole(user: AppUser | null): boolean {
 
 export const isSystemOwner = hasGlobalOwnerRole;
 
+export function currentAcademicYearInitializationError(years: AcademicYear[]): string | null {
+  const currentYears = years.filter((year) => year.active && year.isCurrent);
+  if (currentYears.length === 1) return null;
+  return currentYears.length === 0
+    ? "활성 현재 학년도가 지정되어 있지 않습니다."
+    : "활성 현재 학년도가 여러 개입니다. 학교 운영 설정을 확인해 주세요.";
+}
+
+function currentActiveAcademicYear(years: AcademicYear[]): AcademicYear | null {
+  return currentAcademicYearInitializationError(years) === null
+    ? years.find((year) => year.active && year.isCurrent) ?? null
+    : null;
+}
+
 export function assignmentMatchesScope(assignment: StaffAssignment, scope: Scope): boolean {
   return assignment.active && assignment.academicYearId === scope.academicYearId && assignment.gradeId === scope.gradeId;
 }
@@ -83,7 +97,7 @@ export function filterClassesForScope(classes: ClassRoom[], scope: Scope) {
 }
 
 export function chooseInitialScope(years: AcademicYear[], grades: Grade[], assignments: StaffAssignment[], user: AppUser | null): Scope | null {
-  const year = years.find((item) => item.isCurrent && item.active) ?? years.find((item) => item.active);
+  const year = currentActiveAcademicYear(years);
   if (!year) return null;
   const eligibleGrades = hasGlobalOwnerRole(user)
     ? filterGradesForYear(grades, year.id)
@@ -94,7 +108,7 @@ export function chooseInitialScope(years: AcademicYear[], grades: Grade[], assig
 
 
 export function chooseInitialSchoolScope(years: AcademicYear[], grades: Grade[], assignments: StaffAssignment[], user: AppUser | null): SchoolScope | null {
-  const year = years.find((item) => item.isCurrent && item.active) ?? years.find((item) => item.active);
+  const year = currentActiveAcademicYear(years);
   if (!year) return null;
   if (hasGlobalOwnerRole(user)) return { academicYearId: year.id, gradeId: null };
   return chooseInitialScope(years, grades, assignments, user);
@@ -104,4 +118,15 @@ export function isValidSchoolScope(years: AcademicYear[], grades: Grade[], assig
   if (!scope || !isScopeSelectable(user, assignments, scope)) return false;
   if (!years.some((year) => year.id === scope.academicYearId && year.active)) return false;
   return scope.gradeId === null || grades.some((grade) => grade.id === scope.gradeId && grade.academicYearId === scope.academicYearId && grade.active);
+}
+
+export function resolveSchoolScope(years: AcademicYear[], grades: Grade[], assignments: StaffAssignment[], user: AppUser | null, stored: SchoolScope | null): SchoolScope | null {
+  if (hasGlobalOwnerRole(user)) return chooseInitialSchoolScope(years, grades, assignments, user);
+  return isValidSchoolScope(years, grades, assignments, user, stored)
+    ? stored
+    : chooseInitialSchoolScope(years, grades, assignments, user);
+}
+
+export function hasConcreteGradeScope(scope: SchoolScope | null): scope is Scope {
+  return Boolean(scope?.gradeId);
 }

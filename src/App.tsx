@@ -3,7 +3,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthProvider";
 import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
-import { GradeAdminRoute, OwnerRoute } from "./components/RoleRoute";
+import { AuditRoute, GradeAdminRoute, OwnerRoute } from "./components/RoleRoute";
 import { LoginPage } from "./pages/LoginPage";
 import { ScopeProvider } from "./scope/ScopeProvider";
 
@@ -54,7 +54,7 @@ export default function App() {
             <Route path="/admin" element={<OwnerRoute><AdminPage /></OwnerRoute>} />
             <Route path="/admin/operations" element={<OwnerRoute><OperationsPage /></OwnerRoute>} />
             <Route path="/admin/academic-year-setup" element={<OwnerRoute><AcademicYearSetupPage /></OwnerRoute>} />
-            <Route path="/audit" element={<GradeAdminRoute><AuditPage /></GradeAdminRoute>} />
+            <Route path="/audit" element={<AuditRoute><AuditPage /></AuditRoute>} />
           </Route>
         </Routes>
         </Suspense>

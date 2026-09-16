@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
 import { isGradeAdminForGrade, isSystemOwner } from "../domain/scope";
+import { safeLoadError } from "../domain/presentation";
 import { listScopedPeriods } from "../services/scopedPeriods";
 import { deactivateSelfStudyException, listSelfStudyExceptions, saveSelfStudyException } from "../services/selfStudyExceptions";
 import { useScope } from "../scope/ScopeProvider";
@@ -14,7 +15,7 @@ export function SelfStudyExceptionsPage() {
   const [date, setDate] = useState(today()); const [scopeType, setScopeType] = useState<"school" | "grade">("grade"); const [reasonType, setReasonType] = useState<SelfStudyExceptionReasonType>("manual"); const [reason, setReason] = useState(""); const [error, setError] = useState<string | null>(null);
   const current = scope?.gradeId ? { academicYearId: scope.academicYearId, gradeId: scope.gradeId } : null; const owner = isSystemOwner(appUser); const admin = Boolean(appUser && current && isGradeAdminForGrade(assignments, appUser.uid, current.academicYearId, current.gradeId)); const actor = appUser ? { uid: appUser.uid, name: appUser.displayName } : null;
   async function refresh() { if (!current) return; const [nextItems, nextPeriods] = await Promise.all([listSelfStudyExceptions(current), listScopedPeriods(current.academicYearId, current.gradeId)]); setItems(nextItems); setPeriods(nextPeriods); }
-  useEffect(() => { void refresh(); }, [current?.academicYearId, current?.gradeId]);
+  useEffect(() => { void refresh().catch((caught) => setError(safeLoadError("selfStudyExceptions", caught))); }, [current?.academicYearId, current?.gradeId]);
   async function save() { if (!current || !actor) return; try { if (!owner && scopeType === "school") throw new Error("학교 전체 제외일은 최고관리자만 관리할 수 있습니다."); await saveSelfStudyException({ academicYearId: current.academicYearId, gradeId: scopeType === "grade" ? current.gradeId : null, scopeType, date, reasonType, reason, active: true, ...(periodIds.length ? { periodIds } : {}) }, actor); setReason(""); setPeriodIds([]); await refresh(); } catch (caught) { setError(caught instanceof Error ? caught.message : "저장에 실패했습니다."); } }
   if (!current) return <section className="empty-state"><h2>학년을 선택하세요.</h2></section>;
   if (!owner && !admin) return <section className="empty-state"><h2>제외일 관리 권한이 없습니다.</h2></section>;
