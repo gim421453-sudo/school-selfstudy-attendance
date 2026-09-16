@@ -91,3 +91,17 @@ export function chooseInitialScope(years: AcademicYear[], grades: Grade[], assig
   const grade = eligibleGrades[0];
   return grade ? { academicYearId: year.id, gradeId: grade.id } : null;
 }
+
+
+export function chooseInitialSchoolScope(years: AcademicYear[], grades: Grade[], assignments: StaffAssignment[], user: AppUser | null): SchoolScope | null {
+  const year = years.find((item) => item.isCurrent && item.active) ?? years.find((item) => item.active);
+  if (!year) return null;
+  if (hasGlobalOwnerRole(user)) return { academicYearId: year.id, gradeId: null };
+  return chooseInitialScope(years, grades, assignments, user);
+}
+
+export function isValidSchoolScope(years: AcademicYear[], grades: Grade[], assignments: StaffAssignment[], user: AppUser | null, scope: SchoolScope | null): scope is SchoolScope {
+  if (!scope || !isScopeSelectable(user, assignments, scope)) return false;
+  if (!years.some((year) => year.id === scope.academicYearId && year.active)) return false;
+  return scope.gradeId === null || grades.some((grade) => grade.id === scope.gradeId && grade.academicYearId === scope.academicYearId && grade.active);
+}

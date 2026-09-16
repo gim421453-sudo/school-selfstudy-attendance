@@ -5,6 +5,7 @@ import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { GradeAdminRoute, OwnerRoute } from "./components/RoleRoute";
 import { LoginPage } from "./pages/LoginPage";
+import { ScopeProvider } from "./scope/ScopeProvider";
 
 const AdminPage = lazy(() => import("./pages/AdminPage").then((module) => ({ default: module.AdminPage })));
 const AuditPage = lazy(() => import("./pages/AuditPage").then((module) => ({ default: module.AuditPage })));
@@ -21,6 +22,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <ScopeProvider>
         <Suspense fallback={<div className="card narrow">{"\uBD88\uB7EC\uC624\uB294 \uC911..."}</div>}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
@@ -32,12 +34,13 @@ export default function App() {
             <Route path="/students" element={<GradeAdminRoute><StudentsPage /></GradeAdminRoute>} />
             <Route path="/classes" element={<GradeAdminRoute><ClassesPage /></GradeAdminRoute>} />
             <Route path="/periods" element={<GradeAdminRoute><PeriodsPage /></GradeAdminRoute>} />
-            <Route path="/stats" element={<StatsPage />} />
+            <Route path="/stats" element={<GradeAdminRoute><StatsPage /></GradeAdminRoute>} />
             <Route path="/admin" element={<OwnerRoute><AdminPage /></OwnerRoute>} />
             <Route path="/audit" element={<GradeAdminRoute><AuditPage /></GradeAdminRoute>} />
           </Route>
         </Routes>
         </Suspense>
+        </ScopeProvider>
       </AuthProvider>
     </BrowserRouter>
   );

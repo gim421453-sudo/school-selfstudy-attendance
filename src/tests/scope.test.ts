@@ -4,12 +4,15 @@ import {
   canReadClass,
   canViewClassStatistics,
   chooseInitialScope,
+  chooseInitialSchoolScope,
   exceptionAppliesToScope,
   hasGradeAssignment,
   isGradeAdminForGrade,
   isScopeSelectable,
+  isValidSchoolScope,
   isTeacherForGrade,
 } from "../domain/scope";
+import { visibleNavigation } from "../navigation";
 import type { AcademicYear, AppUser, ClassRoom, Grade, StaffAssignment } from "../types/domain";
 
 const owner: AppUser = { uid: "owner", email: "owner@example.com", displayName: "Owner", active: true, roles: ["teacher", "system_owner"], globalRoles: ["teacher", "system_owner"] };
@@ -43,6 +46,20 @@ describe("annual grade scope", () => {
     expect(isScopeSelectable(teacher, assignments, { academicYearId: "2026", gradeId: "2026-1" })).toBe(true);
     expect(isScopeSelectable(teacher, assignments, { academicYearId: "2026", gradeId: "2026-3" })).toBe(false);
     expect(isScopeSelectable(teacher, assignments, { academicYearId: "2026", gradeId: null })).toBe(false);
+  });
+
+  it("uses whole-year scope only for the system owner and rejects stale persisted scopes", () => {
+    expect(chooseInitialSchoolScope(years, grades, assignments, owner)).toEqual({ academicYearId: "2026", gradeId: null });
+    expect(chooseInitialSchoolScope(years, grades, assignments, teacher)).toEqual({ academicYearId: "2026", gradeId: "2026-1" });
+    expect(isValidSchoolScope(years, grades, assignments, teacher, { academicYearId: "2026", gradeId: "2026-2" })).toBe(true);
+    expect(isValidSchoolScope(years, grades, assignments, teacher, { academicYearId: "2027", gradeId: "2026-2" })).toBe(false);
+    expect(isValidSchoolScope(years, grades, assignments, teacher, { academicYearId: "2027", gradeId: "2027-1" })).toBe(true);
+  });
+
+  it("keeps navigation limited to scoped roles", () => {
+    expect(visibleNavigation(owner, assignments, { academicYearId: "2026", gradeId: null }).some((item) => item.to === "/admin")).toBe(true);
+    expect(visibleNavigation(administrator, assignments, { academicYearId: "2026", gradeId: "2026-2" }).some((item) => item.to === "/students")).toBe(true);
+    expect(visibleNavigation(teacher, assignments, { academicYearId: "2026", gradeId: "2026-1" }).some((item) => item.to === "/students")).toBe(false);
   });
 
   it("limits grade administrator authority to the assigned grade", () => {

@@ -1,14 +1,17 @@
 import type { PropsWithChildren } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
-import { isGradeAdmin, isOwner } from "../domain/access";
+import { isGradeAdminForGrade, isSystemOwner } from "../domain/scope";
+import { useScope } from "../scope/ScopeProvider";
 
 export function GradeAdminRoute({ children }: PropsWithChildren) {
   const { appUser } = useAuth();
-  return isGradeAdmin(appUser) ? children : <Navigate to="/" replace />;
+  const { scope, assignments } = useScope();
+  const allowed = isSystemOwner(appUser) || Boolean(scope?.gradeId && appUser && isGradeAdminForGrade(assignments, appUser.uid, scope.academicYearId, scope.gradeId));
+  return allowed ? children : <Navigate to="/" replace />;
 }
 
 export function OwnerRoute({ children }: PropsWithChildren) {
   const { appUser } = useAuth();
-  return isOwner(appUser) ? children : <Navigate to="/" replace />;
+  return isSystemOwner(appUser) ? children : <Navigate to="/" replace />;
 }

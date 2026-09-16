@@ -31,6 +31,12 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .profile-box { display: grid; gap: 5px; font-size: 13px; }
 .profile-box span { color: #94a3b8; overflow: hidden; text-overflow: ellipsis; }
 .content { padding: 38px; max-width: 1500px; width: 100%; margin: 0 auto; }
+.scope-header { display: flex; justify-content: space-between; align-items: end; gap: 16px; padding: 0 0 18px; margin-bottom: 22px; border-bottom: 1px solid #e2e8f0; }
+.scope-header .eyebrow, .scope-header strong { display: block; }
+.scope-header strong { margin-top: 5px; font-size: 18px; }
+.scope-controls { display: flex; gap: 8px; }
+.scope-controls select { min-width: 130px; }
+.empty-state { min-height: 320px; display: grid; align-content: center; justify-items: start; padding: 34px; border: 1px solid #e2e8f0; background: white; border-radius: 8px; }
 .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px; }
 .page-header h2 { font-size: 30px; margin: 4px 0 0; }
 .eyebrow { font-size: 12px; letter-spacing: .12em; font-weight: 800; color: #64748b; }
@@ -102,6 +108,9 @@ th { color: #687588; font-size: 12px; }
   .content { padding: 22px; }
   .toolbar { align-items: stretch; flex-direction: column; }
   .duty-readout { margin-left: 0; }
+  .scope-header { align-items: stretch; flex-direction: column; }
+  .scope-controls { width: 100%; }
+  .scope-controls select { min-width: 0; flex: 1; }
 }
 
 .section-title-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 14px; }
