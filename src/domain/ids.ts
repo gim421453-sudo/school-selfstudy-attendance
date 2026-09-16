@@ -59,6 +59,14 @@ export function makeSelfStudyAttendanceRecordId(academicYearId: string, gradeId:
   return `${assertIdPart(academicYearId, "academic year")}_${makeDutyAssignmentId(gradeId, date)}_${assertIdPart(periodId, "period")}_${assertIdPart(studentId, "student")}`;
 }
 
+export function makeSelfStudyExceptionId(academicYearId: string, scopeType: "school" | "grade", gradeId: string | null, date: string): string {
+  const year = assertIdPart(academicYearId, "academic year");
+  const normalizedDate = assertIdPart(date, "date");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)) throw new Error("Date must use YYYY-MM-DD.");
+  if (scopeType === "school") return `${year}_school_${normalizedDate}`;
+  return `${year}_${assertIdPart(gradeId ?? "", "grade")}_${normalizedDate}`;
+}
+
 export function makeAttendanceRecordId(classId: string, periodId: string, studentId: string): string {
   return `${assertIdPart(classId, "반")}__${assertIdPart(periodId, "교시")}__${assertIdPart(studentId, "학생")}`;
 }

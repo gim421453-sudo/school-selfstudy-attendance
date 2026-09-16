@@ -8,6 +8,7 @@ import { getClass } from "./classes";
 import { getScopedPeriod } from "./scopedPeriods";
 import { getStudent, listScopedStudents } from "./scopedStudents";
 import { getSelfStudyPermission, listSelfStudyGroupPeriods, listSelfStudyGroups, listSelfStudyMemberships } from "./selfStudyOperations";
+import { assertOperationalSelfStudyDate } from "./selfStudyExceptions";
 
 export interface SelfStudyAttendanceScope { academicYearId: string; gradeId: string; }
 export interface SelfStudyAttendanceAccess { isSystemOwner?: boolean; isGradeAdmin?: boolean; now?: Date; }
@@ -52,6 +53,7 @@ export async function listSelfStudyAttendanceRecords(scope: SelfStudyAttendanceS
 
 async function validateWriteReferences(input: SelfStudyAttendanceWriteInput) {
   validateScope(input); validateDate(input.date);
+  await assertOperationalSelfStudyDate({ academicYearId: input.academicYearId, gradeId: input.gradeId }, input.date);
   const scope = { academicYearId: input.academicYearId, gradeId: input.gradeId };
   const [student, classRoom, period, membership, group, groupPeriod, supervision, permission] = await Promise.all([
     getStudent(input.studentId), getClass(input.classId), getScopedPeriod(input.periodId),
