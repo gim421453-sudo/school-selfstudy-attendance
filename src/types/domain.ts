@@ -89,6 +89,12 @@ export interface ClassRoom {
   active: boolean;
 }
 
+export interface ScopedClassRoom extends ClassRoom {
+  academicYearId: string;
+  gradeId: string;
+  classNumber: number;
+}
+
 export interface Student {
   id: string;
   academicYearId?: string;
@@ -97,6 +103,11 @@ export interface Student {
   name: string;
   classId: string;
   active: boolean;
+}
+
+export interface ScopedStudent extends Student {
+  academicYearId: string;
+  gradeId: string;
 }
 
 export interface Period {

@@ -17,10 +17,14 @@ export interface AuditEvent {
   source?: "manual" | "excel" | "system";
   batchId?: string;
   batchSize?: number;
+  academicYearId?: string;
+  gradeId?: string;
+  classId?: string;
+  studentId?: string;
 }
 
-export function appendAuditLog(batch: WriteBatch, event: AuditEvent) {
-  batch.set(doc(collection(db, "auditLogs")), {
+export function auditEventData(event: AuditEvent) {
+  return {
     actorUid: event.actor.uid,
     actorName: event.actor.name,
     action: event.action,
@@ -31,8 +35,16 @@ export function appendAuditLog(batch: WriteBatch, event: AuditEvent) {
     source: event.source ?? "manual",
     ...(event.batchId ? { batchId: event.batchId } : {}),
     ...(event.batchSize ? { batchSize: event.batchSize } : {}),
+    ...(event.academicYearId ? { academicYearId: event.academicYearId } : {}),
+    ...(event.gradeId ? { gradeId: event.gradeId } : {}),
+    ...(event.classId ? { classId: event.classId } : {}),
+    ...(event.studentId ? { studentId: event.studentId } : {}),
     timestamp: serverTimestamp(),
-  });
+  };
+}
+
+export function appendAuditLog(batch: WriteBatch, event: AuditEvent) {
+  batch.set(doc(collection(db, "auditLogs")), auditEventData(event));
 }
 
 export async function writeAuditLog(event: AuditEvent) {

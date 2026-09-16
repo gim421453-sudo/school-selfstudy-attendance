@@ -17,6 +17,25 @@
       ]
     },
     {
+      "collectionGroup": "classes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "academicYearId", "order": "ASCENDING" },
+        { "fieldPath": "gradeId", "order": "ASCENDING" },
+        { "fieldPath": "classNumber", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "students",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "academicYearId", "order": "ASCENDING" },
+        { "fieldPath": "gradeId", "order": "ASCENDING" },
+        { "fieldPath": "classId", "order": "ASCENDING" },
+        { "fieldPath": "studentNo", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "records",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
