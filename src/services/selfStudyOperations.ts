@@ -3,6 +3,9 @@ import { makeSelfStudyGroupPeriodId, makeSelfStudyMembershipId, makeSelfStudyPer
 import { db } from "../lib/firebase";
 import type { SelfStudyGroup, SelfStudyGroupPeriod, SelfStudyMembership, SelfStudyPermission, SupervisionAssignment } from "../types/domain";
 import { appendAuditLog, type AuditActor } from "./audit";
+import { getClass } from "./classes";
+import { getScopedPeriod } from "./scopedPeriods";
+import { getStudent } from "./scopedStudents";
 
 export interface SelfStudyScope { academicYearId: string; gradeId: string; }
 
@@ -162,8 +165,40 @@ export async function getSelfStudyPermission(scope: SelfStudyScope, studentId: s
   return snapshot.exists() ? withId(snapshot.id, snapshot.data() as Omit<SelfStudyPermission, "id">) : null;
 }
 
-export async function saveSelfStudyPermission(value: Omit<SelfStudyPermission, "id" | "approvedAt" | "updatedAt">, actor: AuditActor, before?: SelfStudyPermission | null) {
+export async function listSelfStudyPermissions(scope: SelfStudyScope, date: string, classId?: string): Promise<SelfStudyPermission[]> {
+  validateScope(scope); validateDate(date);
+  const constraints = [where("academicYearId", "==", scope.academicYearId), where("gradeId", "==", scope.gradeId), where("date", "==", date)];
+  if (classId) constraints.push(where("classId", "==", classId));
+  const snapshot = await getDocs(query(collection(db, "selfStudyPermissions"), ...constraints, orderBy("studentId")));
+  return snapshot.docs.map((item) => withId(item.id, item.data() as Omit<SelfStudyPermission, "id">));
+}
+
+async function validatePermissionReferences(value: Omit<SelfStudyPermission, "id" | "approvedAt" | "updatedAt">) {
+  const [student, classRoom, membership] = await Promise.all([
+    getStudent(value.studentId), getClass(value.classId),
+    getDoc(doc(db, "selfStudyMemberships", makeSelfStudyMembershipId(value.academicYearId, value.gradeId, value.studentId))),
+  ]);
+  if (!student?.active || student.academicYearId !== value.academicYearId || student.gradeId !== value.gradeId || student.classId !== value.classId) throw new Error("학생 scope가 일치하지 않습니다.");
+  if (!classRoom?.active || classRoom.academicYearId !== value.academicYearId || classRoom.gradeId !== value.gradeId) throw new Error("반 scope가 일치하지 않습니다.");
+  if (!membership.exists() || membership.data().active !== true || membership.data().classId !== value.classId || membership.data().academicYearId !== value.academicYearId || membership.data().gradeId !== value.gradeId) throw new Error("학생의 활성 자습 그룹 배정이 필요합니다.");
+  const group = await getDoc(doc(db, "selfStudyGroups", membership.data().selfStudyGroupId));
+  if (!group.exists() || group.data().active !== true || group.data().academicYearId !== value.academicYearId || group.data().gradeId !== value.gradeId) throw new Error("활성 자습 그룹이 필요합니다.");
+  await Promise.all(value.periodIds.map(async (periodId) => {
+    const [period, edge] = await Promise.all([getScopedPeriod(periodId), getDoc(doc(db, "selfStudyGroupPeriods", makeSelfStudyGroupPeriodId(membership.data().selfStudyGroupId, periodId)))]);
+    if (!period?.active || period.academicYearId !== value.academicYearId || period.gradeId !== value.gradeId || !edge.exists() || edge.data().active !== true) throw new Error("선택한 교시는 해당 학생의 활성 자습 운영 교시가 아닙니다.");
+  }));
+}
+
+async function assertPermissionAuthority(value: Omit<SelfStudyPermission, "id" | "approvedAt" | "updatedAt">, actor: AuditActor, isSystemOwner: boolean) {
+  if (isSystemOwner) return;
+  const classRoom = await getClass(value.classId);
+  if (classRoom?.homeroomTeacherUid !== actor.uid) throw new Error("담임교사만 자기 반 자습 예외를 변경할 수 있습니다.");
+}
+
+export async function saveSelfStudyPermission(value: Omit<SelfStudyPermission, "id" | "approvedAt" | "updatedAt">, actor: AuditActor, before?: SelfStudyPermission | null, access: { isSystemOwner?: boolean } = {}) {
   const draft = buildSelfStudyPermission(value);
+  await assertPermissionAuthority(draft, actor, Boolean(access.isSystemOwner));
+  await validatePermissionReferences(draft);
   const next = before ? { ...draft, approvedByUid: before.approvedByUid } : draft;
   const id = makeSelfStudyPermissionId(next.academicYearId, next.gradeId, next.studentId, next.date);
   const batch = writeBatch(db);
@@ -172,8 +207,9 @@ export async function saveSelfStudyPermission(value: Omit<SelfStudyPermission, "
   await batch.commit();
 }
 
-export async function cancelSelfStudyPermission(value: SelfStudyPermission, actor: AuditActor) {
+export async function cancelSelfStudyPermission(value: SelfStudyPermission, actor: AuditActor, access: { isSystemOwner?: boolean } = {}) {
   if (!value.active) return;
+  await assertPermissionAuthority(value, actor, Boolean(access.isSystemOwner));
   const batch = writeBatch(db);
   batch.update(doc(db, "selfStudyPermissions", value.id), { active: false, updatedAt: serverTimestamp() });
   appendAuditLog(batch, { actor, action: "SELF_STUDY_PERMISSION_CANCELLED", targetType: "self_study_permission", targetId: value.id, before: value, after: { ...value, active: false }, academicYearId: value.academicYearId, gradeId: value.gradeId, classId: value.classId, studentId: value.studentId, dutyDate: value.date });

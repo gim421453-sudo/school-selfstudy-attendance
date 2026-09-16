@@ -55,6 +55,10 @@ export function makeSelfStudyPermissionId(academicYearId: string, gradeId: strin
   return `${assertIdPart(academicYearId, "academic year")}_${makeDutyAssignmentId(gradeId, date)}_${assertIdPart(studentId, "student")}`;
 }
 
+export function makeSelfStudyAttendanceRecordId(academicYearId: string, gradeId: string, date: string, periodId: string, studentId: string): string {
+  return `${assertIdPart(academicYearId, "academic year")}_${makeDutyAssignmentId(gradeId, date)}_${assertIdPart(periodId, "period")}_${assertIdPart(studentId, "student")}`;
+}
+
 export function makeAttendanceRecordId(classId: string, periodId: string, studentId: string): string {
   return `${assertIdPart(classId, "반")}__${assertIdPart(periodId, "교시")}__${assertIdPart(studentId, "학생")}`;
 }

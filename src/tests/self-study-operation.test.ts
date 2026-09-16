@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { makeSelfStudyGroupPeriodId, makeSelfStudyMembershipId, makeSelfStudyPermissionId, makeSupervisionAssignmentId } from "../domain/ids";
-import { SELF_STUDY_ATTENDANCE_LABELS, buildSelfStudyAttendanceRows, canUseExcusedAbsence } from "../domain/selfStudyOperation";
+import { makeSelfStudyAttendanceRecordId, makeSelfStudyGroupPeriodId, makeSelfStudyMembershipId, makeSelfStudyPermissionId, makeSupervisionAssignmentId } from "../domain/ids";
+import { SELF_STUDY_ATTENDANCE_LABELS, buildSelfStudyAttendanceRows, canUseExcusedAbsence, resolveSelfStudyAttendanceStatus } from "../domain/selfStudyOperation";
 import { buildSelfStudyGroup, buildSelfStudyGroupPeriod, buildSelfStudyMembership, buildSelfStudyPermission, buildSupervisionAssignment, supervisedGroupIdsForTeacher } from "../services/selfStudyOperations";
+import { buildSelfStudyAttendanceRecord } from "../services/selfStudyAttendance";
 import type { SelfStudyPermission } from "../types/domain";
 
 const scope = { academicYearId: "2026", gradeId: "2026-1" };
@@ -58,5 +59,23 @@ describe("self-study operation domain", () => {
     const rows = buildSelfStudyAttendanceRows([{ id: "student-1", ...scope, classId: "class-1", studentNo: 1, name: "Student", active: true }], [{ id: "member", ...scope, studentId: "student-1", classId: "class-1", selfStudyGroupId: "group-a", active: true }], []);
     expect(rows[0]).toMatchObject({ selfStudyGroupId: "group-a", permission: null, status: null });
     expect(SELF_STUDY_ATTENDANCE_LABELS.EXCUSED_ABSENCE).toBe("인정 결석");
+  });
+
+  it("uses one deterministic D3 attendance identity per student, date, and period", () => {
+    expect(makeSelfStudyAttendanceRecordId("2026", "2026-1", "2026-09-18", "p1", "student-1")).toBe("2026_2026-1_2026-09-18_p1_student-1");
+    expect(makeSelfStudyAttendanceRecordId("2026", "2026-1", "2026-09-18", "p1", "student-1")).not.toBe(makeSelfStudyAttendanceRecordId("2026", "2026-1", "2026-09-18", "p2", "student-1"));
+  });
+
+  it("keeps permission as an absence reason, not an automatic absence", () => {
+    const permission: SelfStudyPermission = { id: "permission", ...scope, classId: "class-1", studentId: "student-1", date: "2026-09-18", periodIds: ["p1"], reasonCode: "MEDICAL", reasonText: "Clinic", active: true, approvedByUid: "home" };
+    expect(resolveSelfStudyAttendanceStatus(false, permission, "p1")).toBe("PRESENT");
+    expect(resolveSelfStudyAttendanceStatus(true, permission, "p1")).toBe("EXCUSED_ABSENCE");
+    expect(resolveSelfStudyAttendanceStatus(true, permission, "p2")).toBe("UNEXCUSED_ABSENCE");
+  });
+
+  it("requires an immutable reason snapshot for excused absence records", () => {
+    const record = buildSelfStudyAttendanceRecord({ ...scope, date: "2026-09-18", periodId: "p1", studentId: "student-1", classId: "class-1", selfStudyGroupId: "group-a", status: "EXCUSED_ABSENCE", permissionId: "permission", permissionReasonCode: "MEDICAL", permissionReasonText: "Clinic", recordedByUid: "teacher", updatedByUid: "teacher", schemaVersion: 1 });
+    expect(record.permissionReasonText).toBe("Clinic");
+    expect(() => buildSelfStudyAttendanceRecord({ ...record, status: "PRESENT" })).toThrow();
   });
 });

@@ -215,6 +215,9 @@ export interface SupervisionAssignment extends Scope {
   teacherUid: string;
   teacherDisplayName: string;
   active: boolean;
+  /** Optional until D3B scheduling exposes edit-window configuration. */
+  editableFrom?: unknown;
+  editableUntil?: unknown;
   updatedAt?: unknown;
 }
 
@@ -232,6 +235,38 @@ export interface SelfStudyPermission extends Scope {
   approvedByUid: string;
   approvedAt?: unknown;
   updatedAt?: unknown;
+}
+
+/** A separate D3 record model. Legacy attendance documents remain untouched. */
+export interface SelfStudyAttendanceRecord extends Scope {
+  id: string;
+  date: string;
+  periodId: string;
+  studentId: string;
+  classId: string;
+  selfStudyGroupId: string;
+  status: SelfStudyAttendanceStatus;
+  permissionId?: string;
+  permissionReasonCode?: SelfStudyPermissionReasonCode;
+  permissionReasonText?: string;
+  recordedByUid: string;
+  recordedAt?: unknown;
+  updatedByUid: string;
+  updatedAt?: unknown;
+  schemaVersion: 1;
+}
+
+export interface SelfStudyAttendanceReadRow {
+  studentId: string;
+  studentName: string;
+  classId: string;
+  classDisplayName: string;
+  selfStudyGroupId: string;
+  selfStudyGroupDisplayName: string;
+  existingAttendanceStatus: SelfStudyAttendanceStatus | null;
+  hasPermission: boolean;
+  permissionReasonCode?: SelfStudyPermissionReasonCode;
+  permissionReasonText?: string;
 }
 
 export interface SelfStudyAttendanceRow {

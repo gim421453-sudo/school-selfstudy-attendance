@@ -17,6 +17,11 @@ export function canUseExcusedAbsence(permission: SelfStudyPermission | null | un
   return hasActiveSelfStudyPermission(permission, periodId);
 }
 
+export function resolveSelfStudyAttendanceStatus(absenceSelected: boolean, permission: SelfStudyPermission | null | undefined, periodId: string): SelfStudyAttendanceStatus {
+  if (!absenceSelected) return "PRESENT";
+  return canUseExcusedAbsence(permission, periodId) ? "EXCUSED_ABSENCE" : "UNEXCUSED_ABSENCE";
+}
+
 /** UI-independent input model for the later current-period attendance screen. */
 export function buildSelfStudyAttendanceRows(students: ScopedStudent[], memberships: SelfStudyMembership[], permissions: SelfStudyPermission[]): SelfStudyAttendanceRow[] {
   const membershipByStudent = new Map(memberships.filter((item) => item.active).map((item) => [item.studentId, item]));
