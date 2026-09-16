@@ -58,6 +58,13 @@ export async function getDutyV2Day(scope: DutyV2Scope): Promise<DutyV2Day | null
   return value.schemaVersion === 2 && value.academicYearId === scope.academicYearId && value.gradeId === scope.gradeId && value.date === scope.date ? value : null;
 }
 
+export async function assertDutyV2DayWritable(scope: DutyV2Scope): Promise<void> {
+  const snapshot = await getDoc(dutyV2DayRef(scope));
+  if (snapshot.exists() && snapshot.data().schemaVersion !== 2) {
+    throw new Error("기존 V1 담당교사 데이터는 V2 단건 수정으로 변경할 수 없습니다.");
+  }
+}
+
 export async function listDutyV2Periods(scope: DutyV2Scope): Promise<DutyV2Period[]> {
   const snapshot = await getDocs(query(collection(dutyV2DayRef(scope), "periods"), orderBy("periodId")));
   return snapshot.docs

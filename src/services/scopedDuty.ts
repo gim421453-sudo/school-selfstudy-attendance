@@ -1,9 +1,10 @@
-import { collection, deleteField, doc, getDoc, getDocs, orderBy, query, serverTimestamp, Timestamp, where, writeBatch } from "firebase/firestore";
+import { collection, doc, getDocs, orderBy, query, serverTimestamp, Timestamp, where, writeBatch } from "firebase/firestore";
 import type { DutyPeriodImportRow } from "../lib/excel";
 import { makeDutyAssignmentId } from "../domain/ids";
 import { db } from "../lib/firebase";
 import type { AppUser, DutyAssignment, DutyPeriodAssignment } from "../types/domain";
 import { appendAuditLog, type AuditActor } from "./audit";
+import { assertDutyV2DayWritable, deleteDutyV2PeriodInBatch, readDutyV2Assignment, writeDutyV2PeriodInBatch } from "./dutyV2Repository";
 import { assertScopedSelfStudyDate } from "./scopedExceptions";
 import { getScopedPeriod, type ScopedPeriod } from "./scopedPeriods";
 import { getAssignment, listAssignmentsForGrade } from "./staffAssignments";
@@ -43,11 +44,7 @@ async function validatePeriod(input: ScopedDutyInput): Promise<ScopedPeriod> {
 }
 
 export async function getScopedDutyAssignment(academicYearId: string, gradeId: string, date: string): Promise<ScopedDutyAssignment | null> {
-  const id = makeDutyAssignmentId(gradeId, date);
-  const snapshot = await getDoc(doc(db, "dutyAssignments", id));
-  if (!snapshot.exists()) return null;
-  const duty = snapshot.data() as ScopedDutyAssignment;
-  return duty.academicYearId === academicYearId && duty.gradeId === gradeId ? duty : null;
+  return readDutyV2Assignment({ academicYearId, gradeId, date }) as Promise<ScopedDutyAssignment | null>;
 }
 
 export async function listScopedDutyAssignments(academicYearId: string, gradeId: string, range: DutyRange): Promise<ScopedDutyAssignment[]> {
@@ -62,8 +59,9 @@ export async function savePeriodDutyAssignment(input: ScopedDutyInput, actor: Au
   const id = makeDutyAssignmentId(input.gradeId, input.date);
   const { academicYearId, gradeId, date, periodId, source = "manual", ...teacher } = input;
   const next = { ...teacher, ...dutyWindow(date) };
+  await assertDutyV2DayWritable({ academicYearId, gradeId, date });
   const batch = writeBatch(db);
-  batch.set(doc(db, "dutyAssignments", id), { academicYearId, gradeId, date, periods: { [periodId]: next }, source, updatedBy: actor.uid, updatedAt: serverTimestamp() }, { merge: true });
+  writeDutyV2PeriodInBatch(batch, { academicYearId, gradeId, date, periodId, ...next });
   appendAuditLog(batch, { actor, action: before ? "DUTY_PERIOD_CHANGED" : "DUTY_PERIOD_ASSIGNED", targetType: "duty_assignment", targetId: `${id}/${periodId}`, before: before ?? null, after: { date, periodId, teacherUid: teacher.teacherUid, teacherName: teacher.teacherName }, source, academicYearId, gradeId, periodId, dutyDate: date });
   await batch.commit();
 }
@@ -74,7 +72,7 @@ export async function removePeriodDutyAssignment(scope: DutyScope & { date: stri
   if (!before) return;
   const id = makeDutyAssignmentId(scope.gradeId, scope.date);
   const batch = writeBatch(db);
-  batch.update(doc(db, "dutyAssignments", id), { [`periods.${scope.periodId}`]: deleteField(), updatedAt: serverTimestamp() });
+  deleteDutyV2PeriodInBatch(batch, { academicYearId: scope.academicYearId, gradeId: scope.gradeId, date: scope.date }, scope.periodId);
   appendAuditLog(batch, { actor, action: "DUTY_PERIOD_REMOVED", targetType: "duty_assignment", targetId: `${id}/${scope.periodId}`, before: { date: scope.date, periodId: scope.periodId, teacherUid: before.teacherUid, teacherName: before.teacherName }, after: null, academicYearId: scope.academicYearId, gradeId: scope.gradeId, periodId: scope.periodId, dutyDate: scope.date });
   await batch.commit();
 }
