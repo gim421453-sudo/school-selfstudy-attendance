@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, beforeEach, describe, it } from "vitest";
 import { assertFails, assertSucceeds, initializeTestEnvironment, type RulesTestEnvironment } from "@firebase/rules-unit-testing";
-import { collection, doc, getDoc, getDocs, serverTimestamp, setDoc, Timestamp, updateDoc } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, query, serverTimestamp, setDoc, Timestamp, updateDoc, where } from "firebase/firestore";
 
 const suite = process.env.FIRESTORE_EMULATOR_HOST ? describe : describe.skip;
 let env: RulesTestEnvironment;
@@ -47,7 +47,7 @@ suite("Firestore security rules", () => {
 
   it("keeps a regular teacher read-only for administration data", async () => {
     const db = env.authenticatedContext("teacher").firestore();
-    await assertSucceeds(getDoc(doc(db, "students", "s1")));
+    await assertFails(getDoc(doc(db, "students", "s1")));
     await assertSucceeds(getDoc(doc(db, "dutyAssignments", "2026-09-15")));
     await assertFails(setDoc(doc(db, "students", "new"), { classId: "2-1", studentNo: 2, name: "New", active: true }));
     await assertFails(setDoc(doc(db, "periods", "p2"), { name: "P2", order: 2, active: true }));
@@ -78,8 +78,8 @@ suite("Firestore security rules", () => {
 
   it("allows a grade admin to manage master data and statistics", async () => {
     const db = env.authenticatedContext("admin").firestore();
-    await assertSucceeds(setDoc(doc(db, "students", "new"), { classId: "2-1", studentNo: 2, name: "New", active: true }));
-    await assertSucceeds(setDoc(doc(db, "periods", "p2"), { name: "P2", order: 2, active: true }));
+    await assertFails(setDoc(doc(db, "students", "new"), { classId: "2-1", studentNo: 2, name: "New", active: true }));
+    await assertFails(setDoc(doc(db, "periods", "p2"), { name: "P2", order: 2, active: true }));
     await assertSucceeds(setDoc(doc(db, "dutyAssignments", "2026-09-16"), { date: "2026-09-16", teacherUid: "teacher", teacherName: "Teacher" }));
     await assertSucceeds(getDoc(doc(db, "statistics", "all")));
   });
@@ -113,5 +113,30 @@ suite("Firestore security rules", () => {
     await assertFails(setDoc(doc(own, "pendingUsers", "pending"), { ...pending, roles: ["system_owner"] }));
     await assertFails(getDocs(collection(env.authenticatedContext("teacher").firestore(), "pendingUsers")));
     await assertSucceeds(getDocs(collection(env.authenticatedContext("owner").firestore(), "pendingUsers")));
+  });
+
+  it("enforces scoped class, student, period, and assignment access", async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await Promise.all([
+        setDoc(doc(db, "users", "scopedOwner"), { ...user("scopedOwner", ["system_owner"]), globalRoles: ["teacher", "system_owner"] }),
+        setDoc(doc(db, "users", "teacherA"), { ...user("teacherA", ["teacher"]), globalRoles: ["teacher"] }),
+        setDoc(doc(db, "users", "adminA"), { ...user("adminA", ["teacher"]), globalRoles: ["teacher"] }),
+        setDoc(doc(db, "staffAssignments", "2026_2026-1_teacherA"), { academicYearId: "2026", gradeId: "2026-1", uid: "teacherA", role: "teacher", active: true }),
+        setDoc(doc(db, "staffAssignments", "2026_2026-1_adminA"), { academicYearId: "2026", gradeId: "2026-1", uid: "adminA", role: "grade_admin", active: true }),
+        setDoc(doc(db, "classes", "scoped-c1"), { academicYearId: "2026", gradeId: "2026-1", classNumber: 1, displayName: "1-1", active: true }),
+        setDoc(doc(db, "classes", "scoped-c2"), { academicYearId: "2026", gradeId: "2026-2", classNumber: 1, displayName: "2-1", active: true }),
+        setDoc(doc(db, "students", "scoped-s1"), { academicYearId: "2026", gradeId: "2026-1", classId: "scoped-c1", studentNo: 1, name: "A", active: true }),
+        setDoc(doc(db, "periods", "scoped-p1"), { academicYearId: "2026", gradeId: "2026-1", name: "P1", order: 1, active: true }),
+      ]);
+    });
+    const teacherA = env.authenticatedContext("teacherA").firestore();
+    const adminA = env.authenticatedContext("adminA").firestore();
+    await assertSucceeds(getDoc(doc(teacherA, "classes", "scoped-c1")));
+    await assertFails(getDoc(doc(teacherA, "classes", "scoped-c2")));
+    await assertFails(setDoc(doc(teacherA, "periods", "blocked"), { academicYearId: "2026", gradeId: "2026-1", name: "P2", order: 2, active: true }));
+    await assertSucceeds(setDoc(doc(adminA, "periods", "scoped-p2"), { academicYearId: "2026", gradeId: "2026-1", name: "P2", order: 2, active: true }));
+    await assertFails(setDoc(doc(adminA, "students", "bad"), { academicYearId: "2026", gradeId: "2026-1", classId: "scoped-c2", studentNo: 2, name: "Bad", active: true }));
+    await assertSucceeds(getDocs(query(collection(teacherA, "classes"), where("academicYearId", "==", "2026"), where("gradeId", "==", "2026-1"))));
   });
 });

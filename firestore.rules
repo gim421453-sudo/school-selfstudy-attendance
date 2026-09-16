@@ -1,189 +1,58 @@
 rules_version = '2';
+service cloud.firestore { match /databases/{database}/documents {
+  function signedIn() { return request.auth != null; }
+  function userExists() { return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)); }
+  function me() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+  function active() { return userExists() && me().active == true; }
+  function owner() { return active() && ((('globalRoles' in me()) && me().globalRoles is list && 'system_owner' in me().globalRoles) || (('roles' in me()) && me().roles is list && 'system_owner' in me().roles)); }
+  function legacyAdmin() { return owner() || (active() && me().roles is list && 'grade_admin' in me().roles); }
+  function aid(y,g,u) { return y + '_' + g + '_' + u; }
+  function assigned(y,g) { return active() && exists(/databases/$(database)/documents/staffAssignments/$(aid(y,g,request.auth.uid))) && get(/databases/$(database)/documents/staffAssignments/$(aid(y,g,request.auth.uid))).data.active == true && get(/databases/$(database)/documents/staffAssignments/$(aid(y,g,request.auth.uid))).data.uid == request.auth.uid; }
+  function gradeAdmin(y,g) { return owner() || (assigned(y,g) && get(/databases/$(database)/documents/staffAssignments/$(aid(y,g,request.auth.uid))).data.role == 'grade_admin'); }
+  function validHome(d) { return !('homeroomTeacherUid' in d) || d.homeroomTeacherUid == null || (d.homeroomTeacherUid is string && exists(/databases/$(database)/documents/staffAssignments/$(aid(d.academicYearId,d.gradeId,d.homeroomTeacherUid))) && get(/databases/$(database)/documents/staffAssignments/$(aid(d.academicYearId,d.gradeId,d.homeroomTeacherUid))).data.active == true); }
+  function validClass(d) { return d.academicYearId is string && d.gradeId is string && d.classNumber is int && d.active is bool && validHome(d); }
+  function validStudentClass(d) { return exists(/databases/$(database)/documents/classes/$(d.classId)) && get(/databases/$(database)/documents/classes/$(d.classId)).data.academicYearId == d.academicYearId && get(/databases/$(database)/documents/classes/$(d.classId)).data.gradeId == d.gradeId; }
+  function legacyDuty(date, period) { return active() && exists(/databases/$(database)/documents/dutyAssignments/$(date)) && get(/databases/$(database)/documents/dutyAssignments/$(date)).data.periods is map && period in get(/databases/$(database)/documents/dutyAssignments/$(date)).data.periods && get(/databases/$(database)/documents/dutyAssignments/$(date)).data.periods[period].teacherUid == request.auth.uid && get(/databases/$(database)/documents/dutyAssignments/$(date)).data.periods[period].editableFrom is timestamp && get(/databases/$(database)/documents/dutyAssignments/$(date)).data.periods[period].editableUntil is timestamp && request.time >= get(/databases/$(database)/documents/dutyAssignments/$(date)).data.periods[period].editableFrom && request.time <= get(/databases/$(database)/documents/dutyAssignments/$(date)).data.periods[period].editableUntil; }
 
-service cloud.firestore {
-  match /databases/{database}/documents {
-    function signedIn() {
-      return request.auth != null;
-    }
-
-    function myUserExists() {
-      return signedIn()
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid));
-    }
-
-    function myUser() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-    }
-
-    function approvedTeacher() {
-      return myUserExists() && myUser().active == true;
-    }
-
-    function hasRole(role) {
-      return approvedTeacher()
-        && myUser().roles is list
-        && role in myUser().roles;
-    }
-
-    function isOwner() {
-      return hasRole('system_owner');
-    }
-
-    function isGradeAdmin() {
-      return isOwner() || hasRole('grade_admin');
-    }
-
-    function isHomeroomTeacher() {
-      return approvedTeacher()
-        && myUser().homeroomClassId is string;
-    }
-
-    function hasDutyPeriod(date, periodId) {
-      return exists(/databases/$(database)/documents/dutyAssignments/$(date))
-        && get(/databases/$(database)/documents/dutyAssignments/$(date)).data.periods is map
-        && periodId in get(/databases/$(database)/documents/dutyAssignments/$(date)).data.periods;
-    }
-
-    function isAssignedDuty(date, periodId) {
-      return approvedTeacher()
-        && hasDutyPeriod(date, periodId)
-        && get(/databases/$(database)/documents/dutyAssignments/$(date)).data.periods[periodId].teacherUid == request.auth.uid;
-    }
-
-    function assignedDutyWindowIsOpen(date, periodId) {
-      return hasDutyPeriod(date, periodId)
-        && get(/databases/$(database)/documents/dutyAssignments/$(date)).data.periods[periodId].editableFrom is timestamp
-        && get(/databases/$(database)/documents/dutyAssignments/$(date)).data.periods[periodId].editableUntil is timestamp
-        && request.time >= get(/databases/$(database)/documents/dutyAssignments/$(date)).data.periods[periodId].editableFrom
-        && request.time <= get(/databases/$(database)/documents/dutyAssignments/$(date)).data.periods[periodId].editableUntil;
-    }
-
-    function canManageAttendance(date, periodId) {
-      return isGradeAdmin() || (isAssignedDuty(date, periodId) && assignedDutyWindowIsOpen(date, periodId));
-    }
-
-    function canViewStats() {
-      return isGradeAdmin();
-    }
-
-    match /users/{uid} {
-      allow read: if signedIn() && uid == request.auth.uid || isGradeAdmin();
-      allow create, delete: if isOwner();
-      allow update: if isOwner()
-        || (
-          isGradeAdmin()
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'displayName', 'homeroomClassId', 'roles'
-          ])
-          && request.resource.data.roles.hasOnly([
-            'teacher', 'homeroom_teacher', 'grade_admin', 'system_owner'
-          ])
-          && (('system_owner' in request.resource.data.roles) == ('system_owner' in resource.data.roles))
-          && (('grade_admin' in request.resource.data.roles) == ('grade_admin' in resource.data.roles))
-        );
-    }
-
-    match /pendingUsers/{uid} {
-      allow read: if signedIn() && uid == request.auth.uid || isOwner();
-      allow create: if signedIn()
-        && uid == request.auth.uid
-        && request.resource.data.keys().hasOnly(['uid', 'email', 'displayName', 'provider', 'createdAt', 'lastLoginAt'])
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.email is string
-        && request.resource.data.displayName is string
-        && request.resource.data.provider == 'google';
-      allow update: if isOwner() || (
-        signedIn()
-        && uid == request.auth.uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['email', 'displayName', 'lastLoginAt'])
-        && request.resource.data.uid == resource.data.uid
-        && request.resource.data.provider == 'google'
-        && request.resource.data.createdAt == resource.data.createdAt
-        && request.resource.data.email is string
-        && request.resource.data.displayName is string
-      );
-      allow delete: if isOwner();
-    }
-
-    match /classes/{classId} {
-      allow read: if approvedTeacher();
-      allow create, update, delete: if isGradeAdmin();
-    }
-
-    match /students/{studentId} {
-      allow read: if approvedTeacher();
-      allow create, update, delete: if isGradeAdmin();
-    }
-
-    match /periods/{periodId} {
-      allow read: if approvedTeacher();
-      allow create, update, delete: if isGradeAdmin();
-    }
-
-    match /dutyAssignments/{date} {
-      allow read: if approvedTeacher();
-      allow create, update, delete: if isGradeAdmin();
-    }
-
-    match /selfStudyExceptions/{date} {
-      allow read: if approvedTeacher();
-      allow create, update, delete: if isGradeAdmin();
-    }
-
-    match /settings/{settingId} {
-      allow read: if approvedTeacher();
-      allow create, update, delete: if isOwner();
-    }
-
-    match /attendance/{date}/records/{recordId} {
-      allow read: if approvedTeacher();
-
-      allow create: if canManageAttendance(date, request.resource.data.periodId)
-        && request.resource.data.keys().hasOnly([
-          'date', 'studentId', 'classId', 'periodId', 'status', 'note',
-          'markedBy', 'markedAt', 'updatedAt'
-        ])
-        && request.resource.data.date == date
-        && request.resource.data.studentId is string
-        && request.resource.data.classId is string
-        && request.resource.data.periodId is string
-        && request.resource.data.status in ['present', 'late', 'absent', 'excused', 'early_leave']
-        && request.resource.data.markedBy == request.auth.uid;
-
-      allow update: if canManageAttendance(date, request.resource.data.periodId)
-        && request.resource.data.date == date
-        && request.resource.data.date == resource.data.date
-        && request.resource.data.studentId == resource.data.studentId
-        && request.resource.data.classId == resource.data.classId
-        && request.resource.data.periodId == resource.data.periodId
-        && request.resource.data.markedBy == request.auth.uid;
-
-      allow delete: if canManageAttendance(date, resource.data.periodId);
-    }
-
-    match /statistics/{statId} {
-      allow read: if canViewStats();
-      allow write: if isGradeAdmin();
-    }
-
-    match /auditLogs/{logId} {
-      allow read: if isGradeAdmin();
-      allow create: if approvedTeacher()
-        && request.resource.data.actorUid == request.auth.uid
-        && request.resource.data.keys().hasOnly([
-          'actorUid', 'actorName', 'action', 'targetType', 'targetId',
-          'before', 'after', 'source', 'batchId', 'batchSize', 'timestamp'
-        ])
-        && request.resource.data.actorName is string
-        && request.resource.data.action is string
-        && request.resource.data.targetType is string
-        && request.resource.data.targetId is string
-        && request.resource.data.timestamp == request.time;
-      allow update, delete: if false;
-    }
-
-    match /{document=**} {
-      allow read, write: if false;
-    }
+  match /users/{uid} { allow read: if signedIn() && (uid == request.auth.uid || owner()); allow write: if owner(); }
+  match /pendingUsers/{uid} {
+    allow read: if signedIn() && (uid == request.auth.uid || owner());
+    allow create: if signedIn() && uid == request.auth.uid && !exists(/databases/$(database)/documents/users/$(uid)) && request.resource.data.keys().hasOnly(['uid','email','displayName','provider','createdAt','lastLoginAt']) && request.resource.data.uid == uid && request.resource.data.email is string && request.resource.data.displayName is string && request.resource.data.provider == 'google';
+    allow update: if owner() || (signedIn() && uid == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['email','displayName','lastLoginAt']) && request.resource.data.uid == resource.data.uid && request.resource.data.provider == 'google');
+    allow delete: if owner();
   }
-}
+  match /academicYears/{id} { allow read: if owner() || (active() && resource.data.active == true); allow write: if owner(); }
+  match /grades/{id} { allow read: if owner() || (active() && resource.data.gradeId == id && assigned(resource.data.academicYearId,id)); allow write: if owner(); }
+  match /staffAssignments/{id} {
+    allow read: if owner() || (active() && (resource.data.uid == request.auth.uid || gradeAdmin(resource.data.academicYearId,resource.data.gradeId)));
+    allow create: if owner() && id == aid(request.resource.data.academicYearId,request.resource.data.gradeId,request.resource.data.uid) && request.resource.data.role in ['teacher','grade_admin'] && request.resource.data.active is bool;
+    allow update: if owner() && id == aid(request.resource.data.academicYearId,request.resource.data.gradeId,request.resource.data.uid) && request.resource.data.academicYearId == resource.data.academicYearId && request.resource.data.gradeId == resource.data.gradeId && request.resource.data.uid == resource.data.uid;
+    allow delete: if owner();
+  }
+  match /classes/{id} {
+    allow read: if owner() || (active() && ('academicYearId' in resource.data) && ('gradeId' in resource.data) && assigned(resource.data.academicYearId,resource.data.gradeId));
+    allow create: if owner() || (gradeAdmin(request.resource.data.academicYearId,request.resource.data.gradeId) && validClass(request.resource.data));
+    allow update: if owner() || (gradeAdmin(resource.data.academicYearId,resource.data.gradeId) && validClass(request.resource.data) && request.resource.data.academicYearId == resource.data.academicYearId && request.resource.data.gradeId == resource.data.gradeId);
+    allow delete: if owner() || gradeAdmin(resource.data.academicYearId,resource.data.gradeId);
+  }
+  match /students/{id} {
+    allow read: if owner() || (active() && ('academicYearId' in resource.data) && ('gradeId' in resource.data) && assigned(resource.data.academicYearId,resource.data.gradeId));
+    allow create: if owner() || (gradeAdmin(request.resource.data.academicYearId,request.resource.data.gradeId) && request.resource.data.academicYearId is string && request.resource.data.gradeId is string && request.resource.data.classId is string && validStudentClass(request.resource.data));
+    allow update: if owner() || (gradeAdmin(resource.data.academicYearId,resource.data.gradeId) && request.resource.data.academicYearId == resource.data.academicYearId && request.resource.data.gradeId == resource.data.gradeId && request.resource.data.classId == resource.data.classId && validStudentClass(request.resource.data));
+    allow delete: if owner() || gradeAdmin(resource.data.academicYearId,resource.data.gradeId);
+  }
+  match /periods/{id} {
+    allow read: if owner() || (active() && ('academicYearId' in resource.data) && ('gradeId' in resource.data) && assigned(resource.data.academicYearId,resource.data.gradeId));
+    allow create: if owner() || (gradeAdmin(request.resource.data.academicYearId,request.resource.data.gradeId) && request.resource.data.academicYearId is string && request.resource.data.gradeId is string);
+    allow update: if owner() || (gradeAdmin(resource.data.academicYearId,resource.data.gradeId) && request.resource.data.academicYearId == resource.data.academicYearId && request.resource.data.gradeId == resource.data.gradeId);
+    allow delete: if owner() || gradeAdmin(resource.data.academicYearId,resource.data.gradeId);
+  }
+  // C2 replaces these legacy-path rules with scoped duty, attendance, exception and audit rules.
+  match /dutyAssignments/{id} { allow read: if active(); allow write: if legacyAdmin(); }
+  match /selfStudyExceptions/{id} { allow read: if active(); allow write: if legacyAdmin(); }
+  match /attendance/{id}/records/{record} { allow read: if active(); allow write: if legacyAdmin() || legacyDuty(id, request.resource.data.periodId); }
+  match /statistics/{id} { allow read, write: if legacyAdmin(); }
+  match /settings/{id} { allow read: if active(); allow write: if owner(); }
+  match /auditLogs/{id} { allow read: if legacyAdmin(); allow create: if active() && request.resource.data.actorUid == request.auth.uid; allow update, delete: if false; }
+  match /{document=**} { allow read, write: if false; }
+} }
