@@ -6,4 +6,5 @@ dist
 firebase-debug.log
 .DS_Store
 firestore-debug.log
+local-backups/
 *.tsbuildinfo
