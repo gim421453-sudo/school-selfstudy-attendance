@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
-import { listPeriods, savePeriod } from "../services/masterData";
-import type { Period } from "../types/domain";
+import { createPeriod, listScopedPeriods, type ScopedPeriod, updatePeriod } from "../services/scopedPeriods";
+import { useScope } from "../scope/ScopeProvider";
 
 const copy = {
   title: "\uC790\uC728 \uAD50\uC2DC \uAD00\uB9AC",
@@ -24,16 +24,17 @@ const initialForm = { name: "\uC790\uC728 1\uAD50\uC2DC", order: 1, startTime: "
 
 export function PeriodsPage() {
   const { appUser } = useAuth();
-  const [periods, setPeriods] = useState<Period[]>([]);
+  const { scope } = useScope();
+  const [periods, setPeriods] = useState<ScopedPeriod[]>([]);
   const [form, setForm] = useState(initialForm);
-  const [editing, setEditing] = useState<Period | null>(null);
+  const [editing, setEditing] = useState<ScopedPeriod | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  async function refresh() { setPeriods(await listPeriods()); }
-  useEffect(() => { void refresh(); }, []);
+  async function refresh() { if (scope?.gradeId) setPeriods(await listScopedPeriods(scope.academicYearId, scope.gradeId)); }
+  useEffect(() => { void refresh(); }, [scope?.academicYearId, scope?.gradeId]);
 
-  function edit(period: Period) {
+  function edit(period: ScopedPeriod) {
     setEditing(period);
     setForm({ name: period.name, order: period.order, startTime: period.startTime, endTime: period.endTime, active: period.active });
     setError("");
@@ -50,9 +51,11 @@ export function PeriodsPage() {
     if (!appUser) return;
     setBusy(true);
     setError("");
-    const period: Period = { id: editing?.id ?? `period-${crypto.randomUUID()}`, ...form, name: form.name.trim() };
+    if (!scope?.gradeId) { setError("작업할 학년을 선택하세요."); return; }
+    const period = { ...form, academicYearId: scope.academicYearId, gradeId: scope.gradeId, name: form.name.trim() };
     try {
-      await savePeriod(period, { uid: appUser.uid, name: appUser.displayName }, editing);
+      if (editing) await updatePeriod({ ...period, id: editing.id }, { uid: appUser.uid, name: appUser.displayName }, editing);
+      else await createPeriod(period, { uid: appUser.uid, name: appUser.displayName });
       await refresh();
       cancel();
     } catch (saveError) {
@@ -65,7 +68,7 @@ export function PeriodsPage() {
   return (
     <>
       <header className="page-header"><div><div className="eyebrow">{copy.settings}</div><h2>{copy.title}</h2></div></header>
-      <div className="grid two">
+      {!scope?.gradeId ? <section className="empty-state"><h2>작업할 학년을 선택하세요.</h2></section> : <div className="grid two">
         <form className="card" onSubmit={submit}>
           <h3>{editing ? copy.edit : copy.add}</h3>
           <label>{copy.order}<input type="number" min={1} value={form.order} onChange={(event) => setForm({ ...form, order: Number(event.target.value) })} /></label>
@@ -85,7 +88,7 @@ export function PeriodsPage() {
             </div>
           ))}
         </section>
-      </div>
+      </div>}
     </>
   );
 }

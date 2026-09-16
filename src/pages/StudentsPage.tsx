@@ -2,32 +2,37 @@ import { FormEvent, useEffect, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
 import { parseStudentWorkbook, type StudentImportSummary } from "../lib/excel";
 import { listClasses } from "../services/classes";
-import { addStudent, commitStudentImport, listStudents } from "../services/masterData";
-import type { ClassRoom, Student } from "../types/domain";
+import { buildScopedStudentImportPreview, commitScopedStudentImport, createStudent, listScopedStudents, type ScopedStudentImportPreview } from "../services/scopedStudents";
+import { useScope } from "../scope/ScopeProvider";
+import type { ClassRoom, ScopedStudent } from "../types/domain";
 
 export function StudentsPage() {
   const { appUser } = useAuth();
-  const [students, setStudents] = useState<Student[]>([]);
+  const { scope } = useScope();
+  const [students, setStudents] = useState<ScopedStudent[]>([]);
   const [classes, setClasses] = useState<ClassRoom[]>([]);
   const [name, setName] = useState("");
-  const [classId, setClassId] = useState("2-1");
+  const [classId, setClassId] = useState("");
   const [studentNo, setStudentNo] = useState(1);
-  const [preview, setPreview] = useState<StudentImportSummary | null>(null);
+  const [preview, setPreview] = useState<ScopedStudentImportPreview | null>(null);
   const [importError, setImportError] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function refresh() {
-    const [nextStudents, nextClasses] = await Promise.all([listStudents(), listClasses()]);
+    if (!scope?.gradeId) return;
+    const scopeInput = { academicYearId: scope.academicYearId, gradeId: scope.gradeId };
+    const [nextStudents, nextClasses] = await Promise.all([listScopedStudents(scopeInput), listClasses(scopeInput.academicYearId, scopeInput.gradeId)]);
     setStudents(nextStudents);
     setClasses(nextClasses);
+    setClassId((current) => nextClasses.some((item) => item.id === current) ? current : nextClasses[0]?.id ?? "");
   }
 
-  useEffect(() => { void refresh(); }, []);
+  useEffect(() => { void refresh(); }, [scope?.academicYearId, scope?.gradeId]);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (!appUser) return;
-    await addStudent({ name, classId, studentNo, active: true }, { uid: appUser.uid, name: appUser.displayName });
+    if (!appUser || !scope?.gradeId) return;
+    await createStudent({ academicYearId: scope.academicYearId, gradeId: scope.gradeId, name, classId, studentNo, active: true }, { uid: appUser.uid, name: appUser.displayName });
     setName("");
     await refresh();
   }
@@ -35,7 +40,8 @@ export function StudentsPage() {
   async function handleFile(file: File) {
     setBusy(true);
     try {
-      setPreview(await parseStudentWorkbook(file, classes, students));
+      if (!scope?.gradeId) return;
+      setPreview(buildScopedStudentImportPreview({ academicYearId: scope.academicYearId, gradeId: scope.gradeId }, await parseStudentWorkbook(file, classes, students), classes as import("../types/domain").ScopedClassRoom[]));
       setImportError("");
     } catch (error) {
       setPreview(null);
@@ -49,7 +55,7 @@ export function StudentsPage() {
     if (!preview || !appUser || preview.errorCount || preview.conflictCount) return;
     setBusy(true);
     try {
-      await commitStudentImport(preview.rows, { uid: appUser.uid, name: appUser.displayName });
+      await commitScopedStudentImport(preview, { uid: appUser.uid, name: appUser.displayName });
       setPreview(null);
       await refresh();
     } finally {
@@ -60,10 +66,10 @@ export function StudentsPage() {
   return (
     <>
       <header className="page-header"><div><div className="eyebrow">{"\uD559\uB144\uBD80"}</div><h2>{"\uD559\uC0DD \uBA85\uBD80 \uAD00\uB9AC"}</h2></div></header>
-      <div className="grid two">
+      {!scope?.gradeId ? <section className="empty-state"><h2>작업할 학년을 선택하세요.</h2></section> : <div className="grid two">
         <form className="card" onSubmit={submit}>
           <h3>{"\uD559\uC0DD \uCD94\uAC00"}</h3>
-          <label>{"\uBC18"}<input value={classId} onChange={(e) => setClassId(e.target.value)} /></label>
+          <label>{"\uBC18"}<select value={classId} onChange={(e) => setClassId(e.target.value)}>{classes.map((item) => <option key={item.id} value={item.id}>{item.displayName}</option>)}</select></label>
           <label>{"\uBC88\uD638"}<input type="number" min={1} value={studentNo} onChange={(e) => setStudentNo(Number(e.target.value))} /></label>
           <label>{"\uC774\uB984"}<input value={name} onChange={(e) => setName(e.target.value)} required /></label>
           <button className="primary">{"\uCD94\uAC00"}</button>
@@ -77,7 +83,7 @@ export function StudentsPage() {
           </label>
           {importError && <p className="text-danger">{importError}</p>}
         </section>
-      </div>
+      </div>}
       {preview && (
         <section className="card import-card">
           <div className="section-title-row"><h3>{"\uBA85\uBD80 \uBBF8\uB9AC\uBCF4\uAE30"}</h3><span className={preview.errorCount || preview.conflictCount ? "text-danger" : "text-success"}>{preview.errorCount || preview.conflictCount ? "\uC624\uB958\uB97C \uD574\uACB0\uD55C \uD6C4 \uC801\uC6A9\uD558\uC138\uC694" : "\uC801\uC6A9 \uAC00\uB2A5"}</span></div>
