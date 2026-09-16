@@ -1,0 +1,189 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function myUserExists() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function myUser() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function approvedTeacher() {
+      return myUserExists() && myUser().active == true;
+    }
+
+    function hasRole(role) {
+      return approvedTeacher()
+        && myUser().roles is list
+        && role in myUser().roles;
+    }
+
+    function isOwner() {
+      return hasRole('system_owner');
+    }
+
+    function isGradeAdmin() {
+      return isOwner() || hasRole('grade_admin');
+    }
+
+    function isHomeroomTeacher() {
+      return approvedTeacher()
+        && myUser().homeroomClassId is string;
+    }
+
+    function hasDutyPeriod(date, periodId) {
+      return exists(/databases/$(database)/documents/dutyAssignments/$(date))
+        && get(/databases/$(database)/documents/dutyAssignments/$(date)).data.periods is map
+        && periodId in get(/databases/$(database)/documents/dutyAssignments/$(date)).data.periods;
+    }
+
+    function isAssignedDuty(date, periodId) {
+      return approvedTeacher()
+        && hasDutyPeriod(date, periodId)
+        && get(/databases/$(database)/documents/dutyAssignments/$(date)).data.periods[periodId].teacherUid == request.auth.uid;
+    }
+
+    function assignedDutyWindowIsOpen(date, periodId) {
+      return hasDutyPeriod(date, periodId)
+        && get(/databases/$(database)/documents/dutyAssignments/$(date)).data.periods[periodId].editableFrom is timestamp
+        && get(/databases/$(database)/documents/dutyAssignments/$(date)).data.periods[periodId].editableUntil is timestamp
+        && request.time >= get(/databases/$(database)/documents/dutyAssignments/$(date)).data.periods[periodId].editableFrom
+        && request.time <= get(/databases/$(database)/documents/dutyAssignments/$(date)).data.periods[periodId].editableUntil;
+    }
+
+    function canManageAttendance(date, periodId) {
+      return isGradeAdmin() || (isAssignedDuty(date, periodId) && assignedDutyWindowIsOpen(date, periodId));
+    }
+
+    function canViewStats() {
+      return isGradeAdmin();
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn() && uid == request.auth.uid || isGradeAdmin();
+      allow create, delete: if isOwner();
+      allow update: if isOwner()
+        || (
+          isGradeAdmin()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'displayName', 'homeroomClassId', 'roles'
+          ])
+          && request.resource.data.roles.hasOnly([
+            'teacher', 'homeroom_teacher', 'grade_admin', 'system_owner'
+          ])
+          && (('system_owner' in request.resource.data.roles) == ('system_owner' in resource.data.roles))
+          && (('grade_admin' in request.resource.data.roles) == ('grade_admin' in resource.data.roles))
+        );
+    }
+
+    match /pendingUsers/{uid} {
+      allow read: if signedIn() && uid == request.auth.uid || isOwner();
+      allow create: if signedIn()
+        && uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['uid', 'email', 'displayName', 'provider', 'createdAt', 'lastLoginAt'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email is string
+        && request.resource.data.displayName is string
+        && request.resource.data.provider == 'google';
+      allow update: if isOwner() || (
+        signedIn()
+        && uid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['email', 'displayName', 'lastLoginAt'])
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.provider == 'google'
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.email is string
+        && request.resource.data.displayName is string
+      );
+      allow delete: if isOwner();
+    }
+
+    match /classes/{classId} {
+      allow read: if approvedTeacher();
+      allow create, update, delete: if isGradeAdmin();
+    }
+
+    match /students/{studentId} {
+      allow read: if approvedTeacher();
+      allow create, update, delete: if isGradeAdmin();
+    }
+
+    match /periods/{periodId} {
+      allow read: if approvedTeacher();
+      allow create, update, delete: if isGradeAdmin();
+    }
+
+    match /dutyAssignments/{date} {
+      allow read: if approvedTeacher();
+      allow create, update, delete: if isGradeAdmin();
+    }
+
+    match /selfStudyExceptions/{date} {
+      allow read: if approvedTeacher();
+      allow create, update, delete: if isGradeAdmin();
+    }
+
+    match /settings/{settingId} {
+      allow read: if approvedTeacher();
+      allow create, update, delete: if isOwner();
+    }
+
+    match /attendance/{date}/records/{recordId} {
+      allow read: if approvedTeacher();
+
+      allow create: if canManageAttendance(date, request.resource.data.periodId)
+        && request.resource.data.keys().hasOnly([
+          'date', 'studentId', 'classId', 'periodId', 'status', 'note',
+          'markedBy', 'markedAt', 'updatedAt'
+        ])
+        && request.resource.data.date == date
+        && request.resource.data.studentId is string
+        && request.resource.data.classId is string
+        && request.resource.data.periodId is string
+        && request.resource.data.status in ['present', 'late', 'absent', 'excused', 'early_leave']
+        && request.resource.data.markedBy == request.auth.uid;
+
+      allow update: if canManageAttendance(date, request.resource.data.periodId)
+        && request.resource.data.date == date
+        && request.resource.data.date == resource.data.date
+        && request.resource.data.studentId == resource.data.studentId
+        && request.resource.data.classId == resource.data.classId
+        && request.resource.data.periodId == resource.data.periodId
+        && request.resource.data.markedBy == request.auth.uid;
+
+      allow delete: if canManageAttendance(date, resource.data.periodId);
+    }
+
+    match /statistics/{statId} {
+      allow read: if canViewStats();
+      allow write: if isGradeAdmin();
+    }
+
+    match /auditLogs/{logId} {
+      allow read: if isGradeAdmin();
+      allow create: if approvedTeacher()
+        && request.resource.data.actorUid == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'actorUid', 'actorName', 'action', 'targetType', 'targetId',
+          'before', 'after', 'source', 'batchId', 'batchSize', 'timestamp'
+        ])
+        && request.resource.data.actorName is string
+        && request.resource.data.action is string
+        && request.resource.data.targetType is string
+        && request.resource.data.targetId is string
+        && request.resource.data.timestamp == request.time;
+      allow update, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

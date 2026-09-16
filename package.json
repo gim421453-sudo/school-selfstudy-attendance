@@ -1,0 +1,32 @@
+{
+  "name": "school-selfstudy-attendance",
+  "private": true,
+  "version": "0.5.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:rules": "node scripts/check-java.mjs && firebase emulators:exec --only firestore \"vitest run src/tests/firestore.rules.test.ts\"",
+    "verify": "npm run build && npm test && npm run test:rules && npm audit"
+  },
+  "dependencies": {
+    "date-fns": "^4.1.0",
+    "firebase": "^12.2.1",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-router-dom": "^7.8.2",
+    "xlsx": "file:vendor/xlsx-0.20.3.tgz"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
+    "@types/node": "^26.5.1",
+    "@types/react": "^19.1.10",
+    "@types/react-dom": "^19.1.7",
+    "@vitejs/plugin-react": "^5.0.2",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.5",
+    "vitest": "^4.1.11"
+  }
+}

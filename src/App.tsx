@@ -1,0 +1,44 @@
+import { lazy, Suspense } from "react";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { AuthProvider } from "./auth/AuthProvider";
+import { Layout } from "./components/Layout";
+import { ProtectedRoute } from "./components/ProtectedRoute";
+import { GradeAdminRoute, OwnerRoute } from "./components/RoleRoute";
+import { LoginPage } from "./pages/LoginPage";
+
+const AdminPage = lazy(() => import("./pages/AdminPage").then((module) => ({ default: module.AdminPage })));
+const AuditPage = lazy(() => import("./pages/AuditPage").then((module) => ({ default: module.AuditPage })));
+const AttendancePage = lazy(() => import("./pages/AttendancePage").then((module) => ({ default: module.AttendancePage })));
+const ClassesPage = lazy(() => import("./pages/ClassesPage").then((module) => ({ default: module.ClassesPage })));
+const DashboardPage = lazy(() => import("./pages/DashboardPage").then((module) => ({ default: module.DashboardPage })));
+const DutySchedulePage = lazy(() => import("./pages/DutySchedulePage").then((module) => ({ default: module.DutySchedulePage })));
+const HistoryPage = lazy(() => import("./pages/HistoryPage").then((module) => ({ default: module.HistoryPage })));
+const PeriodsPage = lazy(() => import("./pages/PeriodsPage").then((module) => ({ default: module.PeriodsPage })));
+const StatsPage = lazy(() => import("./pages/StatsPage").then((module) => ({ default: module.StatsPage })));
+const StudentsPage = lazy(() => import("./pages/StudentsPage").then((module) => ({ default: module.StudentsPage })));
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <Suspense fallback={<div className="card narrow">{"\uBD88\uB7EC\uC624\uB294 \uC911..."}</div>}>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+            <Route index element={<DashboardPage />} />
+            <Route path="/attendance" element={<AttendancePage />} />
+            <Route path="/history" element={<HistoryPage />} />
+            <Route path="/duty" element={<DutySchedulePage />} />
+            <Route path="/students" element={<GradeAdminRoute><StudentsPage /></GradeAdminRoute>} />
+            <Route path="/classes" element={<GradeAdminRoute><ClassesPage /></GradeAdminRoute>} />
+            <Route path="/periods" element={<GradeAdminRoute><PeriodsPage /></GradeAdminRoute>} />
+            <Route path="/stats" element={<StatsPage />} />
+            <Route path="/admin" element={<OwnerRoute><AdminPage /></OwnerRoute>} />
+            <Route path="/audit" element={<GradeAdminRoute><AuditPage /></GradeAdminRoute>} />
+          </Route>
+        </Routes>
+        </Suspense>
+      </AuthProvider>
+    </BrowserRouter>
+  );
+}
