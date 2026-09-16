@@ -155,6 +155,8 @@ export interface SelfStudyException {
   /** New scoped field. enabled is retained for legacy v0.6 documents. */
   active?: boolean;
   enabled?: boolean;
+  /** Omitted means the exception applies to every self-study period on this date. */
+  periodIds?: string[];
 }
 
 export interface AttendanceRecord {

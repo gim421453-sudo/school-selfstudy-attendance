@@ -53,7 +53,7 @@ export async function listSelfStudyAttendanceRecords(scope: SelfStudyAttendanceS
 
 async function validateWriteReferences(input: SelfStudyAttendanceWriteInput) {
   validateScope(input); validateDate(input.date);
-  await assertOperationalSelfStudyDate({ academicYearId: input.academicYearId, gradeId: input.gradeId }, input.date);
+  await assertOperationalSelfStudyDate({ academicYearId: input.academicYearId, gradeId: input.gradeId }, input.date, input.periodId);
   const scope = { academicYearId: input.academicYearId, gradeId: input.gradeId };
   const [student, classRoom, period, membership, group, groupPeriod, supervision, permission] = await Promise.all([
     getStudent(input.studentId), getClass(input.classId), getScopedPeriod(input.periodId),

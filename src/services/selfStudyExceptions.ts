@@ -12,6 +12,7 @@ function validate(value: SelfStudyException) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value.date) || !value.academicYearId || !value.scopeType || !value.reason?.trim() || value.reason.trim().length > 500) throw new Error("자습 제외일 정보가 올바르지 않습니다.");
   if (value.scopeType === "school" && value.gradeId !== null) throw new Error("학교 전체 제외일에는 학년을 지정할 수 없습니다.");
   if (value.scopeType === "grade" && !value.gradeId) throw new Error("학년 제외일에는 학년을 지정해야 합니다.");
+  if (value.periodIds && (value.periodIds.length === 0 || value.periodIds.some((id) => !id.trim()) || new Set(value.periodIds).size !== value.periodIds.length)) throw new Error("제외 교시 정보가 올바르지 않습니다.");
 }
 
 /** Legacy date-level reads remain available for v0.6 pages. */
@@ -29,20 +30,20 @@ export async function listSelfStudyExceptions(scope?: SelfStudyExceptionScope): 
   return snap.docs.map((item) => item.data() as SelfStudyException).filter((item) => item.scopeType === "school" || item.gradeId === scope.gradeId);
 }
 
-export async function getApplicableSelfStudyExceptions(scope: SelfStudyExceptionScope, date: string): Promise<SelfStudyException[]> {
-  return (await listSelfStudyExceptions(scope)).filter((item) => item.date === date && active(item));
+export async function getApplicableSelfStudyExceptions(scope: SelfStudyExceptionScope, date: string, periodId?: string): Promise<SelfStudyException[]> {
+  return (await listSelfStudyExceptions(scope)).filter((item) => item.date === date && active(item) && (!item.periodIds || !periodId || item.periodIds.includes(periodId)));
 }
 
-export async function assertOperationalSelfStudyDate(scope: SelfStudyExceptionScope, date: string): Promise<void>;
+export async function assertOperationalSelfStudyDate(scope: SelfStudyExceptionScope, date: string, periodId?: string): Promise<void>;
 export async function assertOperationalSelfStudyDate(date: string): Promise<void>;
-export async function assertOperationalSelfStudyDate(scopeOrDate: SelfStudyExceptionScope | string, suppliedDate?: string): Promise<void> {
+export async function assertOperationalSelfStudyDate(scopeOrDate: SelfStudyExceptionScope | string, suppliedDate?: string, periodId?: string): Promise<void> {
   if (typeof scopeOrDate === "string") {
     const legacy = await getSelfStudyException(scopeOrDate);
     if (!isSelfStudyDate(scopeOrDate, legacy)) throw new Error(legacy?.reason || "자습 운영 제외일입니다.");
     return;
   }
   const scope = scopeOrDate; const date = suppliedDate!;
-  const exceptions = await getApplicableSelfStudyExceptions(scope, date);
+  const exceptions = await getApplicableSelfStudyExceptions(scope, date, periodId);
   if (!isScopedSelfStudyDate(date, exceptions)) throw new Error(exceptions[0]?.reason || "자습 운영 제외일입니다.");
 }
 
