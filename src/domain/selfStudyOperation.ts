@@ -1,4 +1,4 @@
-import type { ScopedStudent, SelfStudyAttendanceRow, SelfStudyAttendanceStatus, SelfStudyMembership, SelfStudyPermission, SelfStudyPermissionReasonCode } from "../types/domain";
+import type { ScopedStudent, SelfStudyAttendanceReadRow, SelfStudyAttendanceRow, SelfStudyAttendanceStatus, SelfStudyMembership, SelfStudyPermission, SelfStudyPermissionReasonCode } from "../types/domain";
 
 export const SELF_STUDY_ATTENDANCE_LABELS: Record<SelfStudyAttendanceStatus, string> = {
   PRESENT: "출석",
@@ -20,6 +20,27 @@ export function canUseExcusedAbsence(permission: SelfStudyPermission | null | un
 export function resolveSelfStudyAttendanceStatus(absenceSelected: boolean, permission: SelfStudyPermission | null | undefined, periodId: string): SelfStudyAttendanceStatus {
   if (!absenceSelected) return "PRESENT";
   return canUseExcusedAbsence(permission, periodId) ? "EXCUSED_ABSENCE" : "UNEXCUSED_ABSENCE";
+}
+
+export type SelfStudyAttendanceDraft = boolean | undefined;
+
+/** The mobile screen keeps a draft until the teacher explicitly saves it. */
+export function resolveSelfStudyAttendanceDisplayStatus(row: SelfStudyAttendanceReadRow, draft: SelfStudyAttendanceDraft): SelfStudyAttendanceStatus | null {
+  if (draft === undefined) return row.existingAttendanceStatus;
+  if (!draft) return "PRESENT";
+  return row.hasPermission ? "EXCUSED_ABSENCE" : "UNEXCUSED_ABSENCE";
+}
+
+export function countUnenteredSelfStudyAttendance(rows: SelfStudyAttendanceReadRow[], drafts: Record<string, SelfStudyAttendanceDraft>): number {
+  return rows.filter((row) => row.existingAttendanceStatus === null && drafts[row.studentId] === undefined).length;
+}
+
+/** Existing records are never selected by the bulk-present shortcut. */
+export function buildBulkPresentDraft(rows: SelfStudyAttendanceReadRow[], drafts: Record<string, SelfStudyAttendanceDraft>): Record<string, SelfStudyAttendanceDraft> {
+  return rows.reduce<Record<string, SelfStudyAttendanceDraft>>((next, row) => {
+    if (row.existingAttendanceStatus === null && next[row.studentId] === undefined) next[row.studentId] = false;
+    return next;
+  }, { ...drafts });
 }
 
 /** UI-independent input model for the later current-period attendance screen. */

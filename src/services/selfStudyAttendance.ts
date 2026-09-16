@@ -88,10 +88,11 @@ export async function writeSelfStudyAttendance(input: SelfStudyAttendanceWriteIn
   await batch.commit();
 }
 
-export async function listSelfStudyAttendanceReadRows(input: SelfStudyAttendanceScope & { teacherUid: string; date: string; periodId: string; selfStudyGroupId: string }): Promise<SelfStudyAttendanceReadRow[]> {
+export async function listSelfStudyAttendanceReadRows(input: SelfStudyAttendanceScope & { teacherUid: string; date: string; periodId: string; selfStudyGroupId: string; access?: Pick<SelfStudyAttendanceAccess, "isSystemOwner" | "isGradeAdmin"> }): Promise<SelfStudyAttendanceReadRow[]> {
   const scope = { academicYearId: input.academicYearId, gradeId: input.gradeId };
   const supervision = await getDoc(doc(db, "supervisionAssignments", makeSupervisionAssignmentId(input.gradeId, input.date, input.periodId, input.selfStudyGroupId, input.teacherUid)));
-  if (!supervision.exists() || supervision.data().active !== true || supervision.data().teacherUid !== input.teacherUid) return [];
+  const privileged = input.access?.isSystemOwner || input.access?.isGradeAdmin;
+  if (!privileged && (!supervision.exists() || supervision.data().active !== true || supervision.data().teacherUid !== input.teacherUid)) return [];
   const [students, memberships, groups, groupPeriods, records] = await Promise.all([listScopedStudents(scope), listSelfStudyMemberships(scope), listSelfStudyGroups(scope), listSelfStudyGroupPeriods(scope), listSelfStudyAttendanceRecords(scope, input.date, input.periodId, input.selfStudyGroupId)]);
   const group = groups.find((item) => item.id === input.selfStudyGroupId && item.active);
   if (!group || !groupPeriods.some((item) => item.active && item.groupId === group.id && item.periodId === input.periodId)) return [];

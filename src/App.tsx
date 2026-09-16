@@ -20,6 +20,7 @@ const StudentsPage = lazy(() => import("./pages/StudentsPage").then((module) => 
 const SelfStudyGroupsPage = lazy(() => import("./pages/SelfStudyGroupsPage").then((module) => ({ default: module.SelfStudyGroupsPage })));
 const SupervisionPage = lazy(() => import("./pages/SupervisionPage").then((module) => ({ default: module.SupervisionPage })));
 const SelfStudyPermissionsPage = lazy(() => import("./pages/SelfStudyPermissionsPage").then((module) => ({ default: module.SelfStudyPermissionsPage })));
+const SelfStudyAttendancePage = lazy(() => import("./pages/SelfStudyAttendancePage").then((module) => ({ default: module.SelfStudyAttendancePage })));
 
 export default function App() {
   return (
@@ -39,6 +40,7 @@ export default function App() {
             <Route path="/self-study-groups" element={<GradeAdminRoute><SelfStudyGroupsPage /></GradeAdminRoute>} />
             <Route path="/supervision" element={<GradeAdminRoute><SupervisionPage /></GradeAdminRoute>} />
             <Route path="/self-study-permissions" element={<SelfStudyPermissionsPage />} />
+            <Route path="/self-study-attendance" element={<SelfStudyAttendancePage />} />
             <Route path="/periods" element={<GradeAdminRoute><PeriodsPage /></GradeAdminRoute>} />
             <Route path="/stats" element={<GradeAdminRoute><StatsPage /></GradeAdminRoute>} />
             <Route path="/admin" element={<OwnerRoute><AdminPage /></OwnerRoute>} />

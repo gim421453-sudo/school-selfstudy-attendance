@@ -485,6 +485,7 @@ suite("Firestore security rules", () => {
     await assertFails(setDoc(doc(supervisor,"selfStudyAttendanceRecords",`${id}_forged-excuse`),{...base,status:"EXCUSED_ABSENCE",permissionId:"forged",permissionReasonCode:"MEDICAL",permissionReasonText:"forged"}));
     await assertFails(setDoc(doc(other,"selfStudyAttendanceRecords",id),{...base,recordedByUid:"d3-other",updatedByUid:"d3-other"}));
     await assertFails(setDoc(doc(supervisor,"selfStudyAttendanceRecords",`${id}_wrong-group`),{...base,selfStudyGroupId:"wrong-group"}));
+    await assertFails(setDoc(doc(supervisor,"selfStudyAttendanceRecords",`2026_d3-attendance-grade_${date}_wrong-period_d3-student`),{...base,periodId:"wrong-period"}));
     await assertFails(setDoc(doc(supervisor,"selfStudyAttendanceRecords",`2026_d3-attendance-grade_2026-09-19_${periodId}_d3-student`),{...base,date:"2026-09-19"}));
     await assertFails(setDoc(doc(supervisor,"selfStudyAttendanceRecords",`2026_d3-attendance-grade_${date}_${periodId}_d3-inactive-member`),{...base,studentId:"d3-inactive-member"}));
     await assertFails(updateDoc(doc(supervisor,"selfStudyAttendanceRecords",id),{studentId:"d3-inactive-member"}));

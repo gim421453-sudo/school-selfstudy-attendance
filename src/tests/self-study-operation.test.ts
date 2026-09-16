@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { makeSelfStudyAttendanceRecordId, makeSelfStudyGroupPeriodId, makeSelfStudyMembershipId, makeSelfStudyPermissionId, makeSupervisionAssignmentId } from "../domain/ids";
-import { SELF_STUDY_ATTENDANCE_LABELS, buildSelfStudyAttendanceRows, canUseExcusedAbsence, resolveSelfStudyAttendanceStatus } from "../domain/selfStudyOperation";
+import { SELF_STUDY_ATTENDANCE_LABELS, buildBulkPresentDraft, buildSelfStudyAttendanceRows, canUseExcusedAbsence, countUnenteredSelfStudyAttendance, resolveSelfStudyAttendanceDisplayStatus, resolveSelfStudyAttendanceStatus } from "../domain/selfStudyOperation";
 import { buildSelfStudyGroup, buildSelfStudyGroupPeriod, buildSelfStudyMembership, buildSelfStudyPermission, buildSupervisionAssignment, supervisedGroupIdsForTeacher } from "../services/selfStudyOperations";
 import { buildSelfStudyAttendanceRecord } from "../services/selfStudyAttendance";
 import type { SelfStudyPermission } from "../types/domain";
@@ -77,5 +77,33 @@ describe("self-study operation domain", () => {
     const record = buildSelfStudyAttendanceRecord({ ...scope, date: "2026-09-18", periodId: "p1", studentId: "student-1", classId: "class-1", selfStudyGroupId: "group-a", status: "EXCUSED_ABSENCE", permissionId: "permission", permissionReasonCode: "MEDICAL", permissionReasonText: "Clinic", recordedByUid: "teacher", updatedByUid: "teacher", schemaVersion: 1 });
     expect(record.permissionReasonText).toBe("Clinic");
     expect(() => buildSelfStudyAttendanceRecord({ ...record, status: "PRESENT" })).toThrow();
+  });
+
+  it("keeps the supervisor selector limited to active assigned groups and auto-ready data", () => {
+    const assignments = [
+      { id: "a", ...scope, date: "2026-09-18", periodId: "p1", selfStudyGroupId: "group-a", teacherUid: "teacher-a", teacherDisplayName: "A", active: true },
+      { id: "b", ...scope, date: "2026-09-18", periodId: "p1", selfStudyGroupId: "group-b", teacherUid: "teacher-a", teacherDisplayName: "A", active: true },
+      { id: "c", ...scope, date: "2026-09-18", periodId: "p1", selfStudyGroupId: "other", teacherUid: "teacher-b", teacherDisplayName: "B", active: true },
+    ];
+    expect(supervisedGroupIdsForTeacher(assignments, "teacher-a", "2026-09-18", "p1")).toEqual(["group-a", "group-b"]);
+  });
+
+  it("derives present, excused, unexcused, and unentered display without treating permission as absence", () => {
+    const row = { studentId: "student-1", studentName: "Student", classId: "class-1", classDisplayName: "1-1", selfStudyGroupId: "group-a", selfStudyGroupDisplayName: "A", existingAttendanceStatus: null, hasPermission: true, permissionReasonCode: "MEDICAL" as const, permissionReasonText: "Clinic" };
+    expect(resolveSelfStudyAttendanceDisplayStatus(row, undefined)).toBeNull();
+    expect(resolveSelfStudyAttendanceDisplayStatus(row, false)).toBe("PRESENT");
+    expect(resolveSelfStudyAttendanceDisplayStatus(row, true)).toBe("EXCUSED_ABSENCE");
+    expect(resolveSelfStudyAttendanceDisplayStatus({ ...row, hasPermission: false }, true)).toBe("UNEXCUSED_ABSENCE");
+  });
+
+  it("bulk present selects only unentered students and leaves recorded absences untouched", () => {
+    const rows = [
+      { studentId: "new", studentName: "New", classId: "class-1", classDisplayName: "1-1", selfStudyGroupId: "group-a", selfStudyGroupDisplayName: "A", existingAttendanceStatus: null, hasPermission: false },
+      { studentId: "excused", studentName: "Excused", classId: "class-1", classDisplayName: "1-1", selfStudyGroupId: "group-a", selfStudyGroupDisplayName: "A", existingAttendanceStatus: "EXCUSED_ABSENCE" as const, hasPermission: true },
+      { studentId: "draft", studentName: "Draft", classId: "class-1", classDisplayName: "1-1", selfStudyGroupId: "group-a", selfStudyGroupDisplayName: "A", existingAttendanceStatus: null, hasPermission: false },
+    ];
+    const draft = buildBulkPresentDraft(rows, { draft: true });
+    expect(draft).toEqual({ new: false, draft: true });
+    expect(countUnenteredSelfStudyAttendance(rows, draft)).toBe(0);
   });
 });

@@ -144,3 +144,27 @@ code { background: #eef2f7; padding: 2px 5px; border-radius: 5px; }
   .filter-actions { grid-column: auto; }
   .section-title-row, .attendance-summary { align-items: stretch; flex-direction: column; }
 }
+
+.self-study-attendance-page { padding-bottom: 84px; }
+.attendance-controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; position: sticky; top: 0; z-index: 3; }
+.attendance-controls label { margin: 0; }
+.self-study-counts { display: flex; flex-wrap: wrap; gap: 8px 14px; color: #526176; font-size: 13px; }
+.self-study-student-list { display: grid; gap: 10px; }
+.self-study-student-card { border: 1px solid #dbe4ed; border-radius: 8px; background: #fff; padding: 14px; }
+.student-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.student-card-heading strong, .student-card-heading span { display: block; }
+.student-card-heading strong { font-size: 17px; }
+.student-card-heading div > span { color: #6b778a; font-size: 13px; margin-top: 3px; }
+.permission-badge { display: inline-block; margin-top: 9px; border-radius: 4px; background: #fff3d8; color: #7a4b00; padding: 4px 7px; font-size: 12px; font-weight: 700; }
+.attendance-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.attendance-choice button { background: #eef2f6; color: #334155; }
+.attendance-choice button.active.present { background: #dff5e8; color: #11663d; }
+.attendance-choice button.active.absent { background: #fdebec; color: #a61f29; }
+.attendance-tag.present { background: #dff5e8; color: #11663d; }
+.attendance-tag.excused { background: #fff3d8; color: #7a4b00; }
+.attendance-tag.unexcused { background: #fdebec; color: #a61f29; }
+.self-study-save-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px max(18px, calc((100vw - 1180px) / 2)); border-top: 1px solid #dbe4ed; background: rgba(255, 255, 255, .97); box-shadow: 0 -4px 12px rgba(15, 23, 42, .08); }
+
+@media (max-width: 900px) {
+  .attendance-controls { position: static; grid-template-columns: 1fr; }
+}
