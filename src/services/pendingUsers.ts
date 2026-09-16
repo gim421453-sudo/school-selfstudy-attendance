@@ -29,12 +29,12 @@ export async function listPendingUsers(): Promise<PendingUser[]> {
   return snap.docs.map((item) => item.data() as PendingUser);
 }
 
-export async function approvePendingUser(pending: PendingUser, role: "teacher" | "grade_admin", actor: AuditActor) {
-  const roles: AppUser["roles"] = role === "grade_admin" ? ["teacher", "grade_admin"] : ["teacher"];
+export async function approvePendingUser(pending: PendingUser, actor: AuditActor) {
+  const roles: AppUser["roles"] = ["teacher"];
   const batch = writeBatch(db);
-  batch.set(doc(db, "users", pending.uid), { email: pending.email, displayName: pending.displayName, roles, active: true });
+  batch.set(doc(db, "users", pending.uid), { email: pending.email, displayName: pending.displayName, globalRoles: ["teacher"], roles, active: true });
   batch.delete(doc(db, "pendingUsers", pending.uid));
-  appendAuditLog(batch, { actor, action: "USER_APPROVED", targetType: "pending_user", targetId: pending.uid, before: { email: pending.email, displayName: pending.displayName, provider: pending.provider }, after: { email: pending.email, displayName: pending.displayName, roles, active: true } });
+  appendAuditLog(batch, { actor, action: "USER_APPROVED", targetType: "pending_user", targetId: pending.uid, before: { email: pending.email, displayName: pending.displayName, provider: pending.provider }, after: { email: pending.email, displayName: pending.displayName, globalRoles: ["teacher"], active: true } });
   await batch.commit();
 }
 
