@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, beforeEach, describe, it } from "vitest";
 import { assertFails, assertSucceeds, initializeTestEnvironment, type RulesTestEnvironment } from "@firebase/rules-unit-testing";
-import { collection, doc, getDoc, getDocs, query, serverTimestamp, setDoc, Timestamp, updateDoc, where, writeBatch } from "firebase/firestore";
+import { collection, collectionGroup, deleteDoc, doc, getDoc, getDocs, query, serverTimestamp, setDoc, Timestamp, updateDoc, where, writeBatch } from "firebase/firestore";
 
 const suite = process.env.FIRESTORE_EMULATOR_HOST ? describe : describe.skip;
 let env: RulesTestEnvironment;
@@ -57,10 +57,10 @@ suite("Firestore security rules", () => {
 
   it("allows only the assigned teacher to write that date's attendance", async () => {
     const record = { date: "2026-09-15", studentId: "s1", classId: "2-1", periodId: "p1", status: "present", note: "", markedBy: "dutyTeacher", markedAt: serverTimestamp(), updatedAt: serverTimestamp() };
-    await assertSucceeds(setDoc(doc(env.authenticatedContext("dutyTeacher").firestore(), "attendance", "2026-09-15", "records", "r1"), record));
+    await assertFails(setDoc(doc(env.authenticatedContext("dutyTeacher").firestore(), "attendance", "2026-09-15", "records", "r1"), record));
     await assertFails(setDoc(doc(env.authenticatedContext("teacher").firestore(), "attendance", "2026-09-15", "records", "r2"), { ...record, markedBy: "teacher" }));
     await assertFails(setDoc(doc(env.authenticatedContext("dutyTeacher").firestore(), "attendance", "2026-09-15", "records", "r3"), { ...record, periodId: "p2" }));
-    await assertSucceeds(setDoc(doc(env.authenticatedContext("teacher").firestore(), "attendance", "2026-09-15", "records", "r4"), { ...record, periodId: "p2", markedBy: "teacher" }));
+    await assertFails(setDoc(doc(env.authenticatedContext("teacher").firestore(), "attendance", "2026-09-15", "records", "r4"), { ...record, periodId: "p2", markedBy: "teacher" }));
   });
 
   it("enforces the duty edit window and denies legacy assignments", async () => {
@@ -73,7 +73,7 @@ suite("Firestore security rules", () => {
     const teacherDb = env.authenticatedContext("dutyTeacher").firestore();
     await assertFails(setDoc(doc(teacherDb, "attendance", "2026-09-16", "records", "before"), record));
     await assertFails(setDoc(doc(teacherDb, "attendance", "2026-09-17", "records", "legacy"), { ...record, date: "2026-09-17" }));
-    await assertSucceeds(setDoc(doc(env.authenticatedContext("admin").firestore(), "attendance", "2026-09-17", "records", "admin"), { ...record, date: "2026-09-17", markedBy: "admin" }));
+    await assertFails(setDoc(doc(env.authenticatedContext("admin").firestore(), "attendance", "2026-09-17", "records", "admin"), { ...record, date: "2026-09-17", markedBy: "admin" }));
   });
 
   it("allows a grade admin to manage master data and statistics", async () => {
@@ -95,7 +95,7 @@ suite("Firestore security rules", () => {
     const db = env.authenticatedContext("owner").firestore();
     await assertSucceeds(updateDoc(doc(db, "users", "teacher"), { active: false }));
     await assertFails(updateDoc(doc(db, "auditLogs", "seed"), { action: "ALTERED" }));
-    await assertSucceeds(setDoc(doc(db, "auditLogs", "new"), { actorUid: "owner", actorName: "owner", action: "X", targetType: "x", targetId: "x", timestamp: serverTimestamp() }));
+    await assertSucceeds(setDoc(doc(db, "auditLogs", "new"), { actorUid: "owner", actorName: "owner", action: "X", targetType: "x", targetId: "x", before: null, after: null, source: "system", timestamp: serverTimestamp() }));
   });
 
   it("reserves grade-admin role changes for the system owner", async () => {
@@ -197,7 +197,7 @@ suite("Firestore security rules", () => {
     const batchParent = { ...parent, date: "2026-09-18", updatedAt: serverTimestamp() };
     batch.set(doc(adminA, "dutyAssignments", batchParentId), batchParent);
     batch.set(doc(adminA, "dutyAssignments", batchParentId, "periods", "duty-p1"), { ...child, date: "2026-09-18", updatedAt: serverTimestamp() });
-    batch.set(doc(adminA, "auditLogs", "duty-batch"), { actorUid: "adminA", actorName: "adminA", action: "DUTY_IMPORT_APPLIED", targetType: "duty", targetId: batchParentId, timestamp: serverTimestamp() });
+    batch.set(doc(adminA, "auditLogs", "duty-batch"), { actorUid: "adminA", actorName: "adminA", action: "DUTY_IMPORT_APPLIED", targetType: "duty", targetId: batchParentId, before: null, after: null, source: "excel", academicYearId: "2026", gradeId: "2026-1", timestamp: serverTimestamp() });
     await assertSucceeds(batch.commit());
     const badBatch = writeBatch(adminA);
     badBatch.set(doc(adminA, "dutyAssignments", "2026-1_2026-09-19"), { ...parent, date: "2026-09-19", updatedAt: serverTimestamp() });
@@ -222,5 +222,94 @@ suite("Firestore security rules", () => {
     await assertFails(setDoc(doc(ownerDb, "selfStudyExceptions", "bad-grade"), { ...gradeException, gradeId: null }));
     await assertFails(updateDoc(doc(adminA, "selfStudyExceptions", "grade"), { gradeId: "2026-2" }));
     await assertSucceeds(getDoc(doc(ownerDb, "dutyAssignments", "2026-09-15")));
+  });
+
+  it("enforces scoped attendance, history, and audit rules", async () => {
+    const date = "2026-09-16";
+    const gradeId = "2026-1";
+    const dayId = `${gradeId}_${date}`;
+    const record = (studentId: string, classId = "att-c1", markedBy = "teacherA") => ({ academicYearId: "2026", gradeId, date, classId, studentId, periodId: "att-p1", status: "present", note: "", markedBy, markedAt: Timestamp.now(), updatedAt: Timestamp.now() });
+    const recordId = (studentId: string, classId = "att-c1") => `${classId}__att-p1__${studentId}`;
+    const audit = (actorUid: string, extras = {}) => ({ actorUid, actorName: actorUid, action: "ATTENDANCE_CREATED", targetType: "attendance", targetId: `${dayId}/${recordId("att-s1")}`, before: null, after: { status: "present" }, source: "manual", academicYearId: "2026", gradeId, classId: "att-c1", studentId: "att-s1", periodId: "att-p1", dutyDate: date, timestamp: serverTimestamp(), ...extras });
+    await env.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await Promise.all([
+        setDoc(doc(db, "users", "teacherA"), user("teacherA", ["teacher"], { globalRoles: ["teacher"] })),
+        setDoc(doc(db, "users", "adminA"), user("adminA", ["teacher"], { globalRoles: ["teacher"] })),
+        setDoc(doc(db, "users", "adminB"), user("adminB", ["teacher"], { globalRoles: ["teacher"] })),
+        setDoc(doc(db, "users", "homeA"), user("homeA", ["teacher"], { globalRoles: ["teacher"] })),
+        setDoc(doc(db, "users", "teacherWrong"), user("teacherWrong", ["teacher"], { globalRoles: ["teacher"] })),
+        setDoc(doc(db, "grades", gradeId), { academicYearId: "2026", gradeNumber: 1, displayName: "1", active: true }),
+        setDoc(doc(db, "grades", "2026-2"), { academicYearId: "2026", gradeNumber: 2, displayName: "2", active: true }),
+        setDoc(doc(db, "staffAssignments", "2026_2026-1_teacherA"), { academicYearId: "2026", gradeId, uid: "teacherA", role: "teacher", active: true }),
+        setDoc(doc(db, "staffAssignments", "2026_2026-1_adminA"), { academicYearId: "2026", gradeId, uid: "adminA", role: "grade_admin", active: true }),
+        setDoc(doc(db, "staffAssignments", "2026_2026-1_homeA"), { academicYearId: "2026", gradeId, uid: "homeA", role: "teacher", active: true }),
+        setDoc(doc(db, "staffAssignments", "2026_2026-1_teacherWrong"), { academicYearId: "2026", gradeId, uid: "teacherWrong", role: "teacher", active: true }),
+        setDoc(doc(db, "staffAssignments", "2026_2026-2_adminB"), { academicYearId: "2026", gradeId: "2026-2", uid: "adminB", role: "grade_admin", active: true }),
+        setDoc(doc(db, "classes", "att-c1"), { academicYearId: "2026", gradeId, classNumber: 1, displayName: "1-1", active: true, homeroomTeacherUid: "homeA" }),
+        setDoc(doc(db, "classes", "att-c2"), { academicYearId: "2026", gradeId, classNumber: 2, displayName: "1-2", active: true }),
+        setDoc(doc(db, "classes", "att-c3"), { academicYearId: "2026", gradeId: "2026-2", classNumber: 1, displayName: "2-1", active: true }),
+        setDoc(doc(db, "students", "att-s1"), { academicYearId: "2026", gradeId, classId: "att-c1", studentNo: 1, name: "A", active: true }),
+        setDoc(doc(db, "students", "att-s2"), { academicYearId: "2026", gradeId, classId: "att-c1", studentNo: 2, name: "B", active: true }),
+        setDoc(doc(db, "students", "att-s3"), { academicYearId: "2026", gradeId, classId: "att-c2", studentNo: 1, name: "C", active: true }),
+        setDoc(doc(db, "students", "att-s4"), { academicYearId: "2026", gradeId: "2026-2", classId: "att-c3", studentNo: 1, name: "D", active: true }),
+        setDoc(doc(db, "periods", "att-p1"), { academicYearId: "2026", gradeId, name: "P1", order: 1, active: true }),
+        setDoc(doc(db, "periods", "att-p2"), { academicYearId: "2026", gradeId: "2026-2", name: "P2", order: 1, active: true }),
+        setDoc(doc(db, "dutyAssignments", dayId), { academicYearId: "2026", gradeId, date, schemaVersion: 2, updatedAt: Timestamp.now() }),
+        setDoc(doc(db, "dutyAssignments", dayId, "periods", "att-p1"), { academicYearId: "2026", gradeId, date, periodId: "att-p1", teacherUid: "teacherA", teacherName: "Teacher A", editableFrom: Timestamp.fromDate(new Date("2000-01-01T00:00:00Z")), editableUntil: Timestamp.fromDate(new Date("2100-01-01T00:00:00Z")), updatedAt: Timestamp.now() }),
+        setDoc(doc(db, "dutyAssignments", "2026-1_2026-09-17"), { academicYearId: "2026", gradeId, date: "2026-09-17", schemaVersion: 2, updatedAt: Timestamp.now() }),
+        setDoc(doc(db, "dutyAssignments", "2026-1_2026-09-17", "periods", "att-p1"), { academicYearId: "2026", gradeId, date: "2026-09-17", periodId: "att-p1", teacherUid: "teacherA", teacherName: "Teacher A", editableFrom: Timestamp.fromDate(new Date("2000-01-01T00:00:00Z")), editableUntil: Timestamp.fromDate(new Date("2001-01-01T00:00:00Z")), updatedAt: Timestamp.now() }),
+        setDoc(doc(db, "attendance", dayId, "records", recordId("att-s1")), record("att-s1")),
+        setDoc(doc(db, "attendance", dayId, "records", recordId("att-s3", "att-c2")), record("att-s3", "att-c2")),
+        setDoc(doc(db, "attendance", "legacy", "records", "legacy"), { date, classId: "att-c1", studentId: "att-s1", periodId: "att-p1", status: "present" }),
+      ]);
+    });
+    const teacherA = env.authenticatedContext("teacherA").firestore();
+    const adminA = env.authenticatedContext("adminA").firestore();
+    const adminB = env.authenticatedContext("adminB").firestore();
+    const homeA = env.authenticatedContext("homeA").firestore();
+    const teacherWrong = env.authenticatedContext("teacherWrong").firestore();
+    const ownerDb = env.authenticatedContext("owner").firestore();
+    await assertSucceeds(getDoc(doc(ownerDb, "attendance", dayId, "records", recordId("att-s1"))));
+    await assertSucceeds(getDoc(doc(adminA, "attendance", dayId, "records", recordId("att-s1"))));
+    await assertFails(getDoc(doc(adminB, "attendance", dayId, "records", recordId("att-s1"))));
+    await assertSucceeds(getDoc(doc(homeA, "attendance", dayId, "records", recordId("att-s1"))));
+    await assertFails(getDoc(doc(homeA, "attendance", dayId, "records", recordId("att-s3", "att-c2"))));
+    await assertSucceeds(getDoc(doc(teacherA, "attendance", dayId, "records", recordId("att-s1"))));
+    await assertFails(getDoc(doc(teacherA, "attendance", "legacy", "records", "legacy")));
+    await assertSucceeds(getDoc(doc(ownerDb, "attendance", "legacy", "records", "legacy")));
+    await assertSucceeds(setDoc(doc(teacherA, "attendance", dayId, "records", recordId("att-s2")), record("att-s2")));
+    await assertSucceeds(setDoc(doc(adminA, "attendance", dayId, "records", recordId("att-s2")), record("att-s2", "att-c1", "adminA")));
+    await assertSucceeds(setDoc(doc(ownerDb, "attendance", dayId, "records", recordId("att-s2")), record("att-s2", "att-c1", "owner")));
+    await assertFails(setDoc(doc(adminB, "attendance", dayId, "records", recordId("att-s2")), record("att-s2", "att-c1", "adminB")));
+    await assertFails(setDoc(doc(homeA, "attendance", dayId, "records", recordId("att-s2")), record("att-s2", "att-c1", "homeA")));
+    await assertFails(setDoc(doc(teacherWrong, "attendance", dayId, "records", recordId("att-s2")), record("att-s2", "att-c1", "teacherWrong")));
+    await assertFails(setDoc(doc(teacherA, "attendance", "2026-1_2026-09-17", "records", recordId("att-s2")), { ...record("att-s2"), date: "2026-09-17" }));
+    await assertFails(setDoc(doc(teacherA, "attendance", dayId, "records", recordId("att-s4", "att-c1")), { ...record("att-s4"), studentId: "att-s4" }));
+    await assertFails(setDoc(doc(teacherA, "attendance", dayId, "records", "att-c1__att-p2__att-s1"), { ...record("att-s1"), periodId: "att-p2" }));
+    await assertFails(updateDoc(doc(teacherA, "attendance", dayId, "records", recordId("att-s1")), { classId: "att-c2" }));
+    await assertSucceeds(getDocs(query(collectionGroup(teacherA, "records"), where("academicYearId", "==", "2026"), where("gradeId", "==", gradeId), where("date", "==", date), where("periodId", "==", "att-p1"))));
+    await assertFails(getDocs(collectionGroup(teacherA, "records")));
+    await assertSucceeds(getDocs(query(collectionGroup(adminA, "records"), where("academicYearId", "==", "2026"), where("gradeId", "==", gradeId), where("date", ">=", date), where("date", "<=", date))));
+    await assertFails(getDocs(collectionGroup(adminA, "records")));
+    await assertSucceeds(getDocs(query(collectionGroup(homeA, "records"), where("academicYearId", "==", "2026"), where("gradeId", "==", gradeId), where("classId", "==", "att-c1"), where("date", ">=", date), where("date", "<=", date))));
+    await assertFails(getDocs(query(collectionGroup(homeA, "records"), where("academicYearId", "==", "2026"), where("gradeId", "==", gradeId), where("date", ">=", date), where("date", "<=", date))));
+    await assertSucceeds(setDoc(doc(teacherA, "auditLogs", "teacher-audit"), audit("teacherA")));
+    await assertFails(setDoc(doc(teacherA, "auditLogs", "forged-audit"), audit("owner")));
+    await assertSucceeds(getDocs(query(collection(adminA, "auditLogs"), where("academicYearId", "==", "2026"), where("gradeId", "==", gradeId))));
+    await assertFails(getDocs(collection(adminA, "auditLogs")));
+    await assertFails(getDocs(collection(teacherA, "auditLogs")));
+    await assertSucceeds(getDocs(collection(ownerDb, "auditLogs")));
+    await assertFails(updateDoc(doc(teacherA, "auditLogs", "teacher-audit"), { action: "ALTERED" }));
+    await assertFails(deleteDoc(doc(teacherA, "auditLogs", "teacher-audit")));
+    const batch = writeBatch(teacherA);
+    batch.set(doc(teacherA, "attendance", dayId, "records", recordId("att-s1")), record("att-s1"));
+    batch.set(doc(teacherA, "attendance", dayId, "records", recordId("att-s2")), record("att-s2"));
+    batch.set(doc(teacherA, "auditLogs", "teacher-batch"), audit("teacherA", { action: "BULK_ATTENDANCE_MARKED", targetId: `${dayId}/att-c1/att-p1`, batchId: "batch", batchSize: 2 }));
+    await assertSucceeds(batch.commit());
+    const badBatch = writeBatch(teacherA);
+    badBatch.set(doc(teacherA, "attendance", dayId, "records", recordId("att-s1")), record("att-s1"));
+    badBatch.set(doc(teacherA, "attendance", dayId, "records", "att-c1__att-p2__att-s2"), { ...record("att-s2"), periodId: "att-p2" });
+    await assertFails(badBatch.commit());
   });
 });

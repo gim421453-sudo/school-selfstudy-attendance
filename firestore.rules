@@ -20,6 +20,22 @@ service cloud.firestore { match /databases/{database}/documents {
   function validException(d) { return d.keys().hasOnly(['academicYearId','scopeType','gradeId','date','reasonType','reason','active']) && d.academicYearId is string && d.scopeType in ['school','grade'] && d.date is string && d.reasonType in ['holiday','exam','school_event','manual'] && d.reason is string && d.reason.size() > 0 && d.reason.size() <= 500 && d.active is bool && ((d.scopeType == 'school' && d.gradeId == null) || (d.scopeType == 'grade' && d.gradeId is string && exists(/databases/$(database)/documents/grades/$(d.gradeId)) && get(/databases/$(database)/documents/grades/$(d.gradeId)).data.academicYearId == d.academicYearId)); }
   function exceptionReadable(d) { return owner() || (active() && ('scopeType' in d) && ('academicYearId' in d) && ('gradeId' in d) && ((d.scopeType == 'school' && d.gradeId == null) || (d.scopeType == 'grade' && assigned(d.academicYearId,d.gradeId)))); }
   function sameExceptionScope(before, after) { return after.academicYearId == before.academicYearId && after.scopeType == before.scopeType && after.gradeId == before.gradeId && after.date == before.date; }
+  function dutyChild(y,g,date,period) { return get(/databases/$(database)/documents/dutyAssignments/$(g + '_' + date)/periods/$(period)).data; }
+  function validDutyForAttendance(y,g,date,period) { let child = dutyChild(y,g,date,period); return child.academicYearId == y && child.gradeId == g && child.date == date && child.periodId == period; }
+  function dutyAssigned(y,g,date,period) { let child = dutyChild(y,g,date,period); return assigned(y,g) && child.academicYearId == y && child.gradeId == g && child.date == date && child.periodId == period && child.teacherUid == request.auth.uid; }
+  function dutyEditable(y,g,date,period) { let child = dutyChild(y,g,date,period); return assigned(y,g) && child.academicYearId == y && child.gradeId == g && child.date == date && child.periodId == period && child.teacherUid == request.auth.uid && child.editableFrom is timestamp && child.editableUntil is timestamp && request.time >= child.editableFrom && request.time <= child.editableUntil; }
+  function homeroomRecord(d) { let classRoom = get(/databases/$(database)/documents/classes/$(d.classId)).data; return active() && classRoom.academicYearId == d.academicYearId && classRoom.gradeId == d.gradeId && classRoom.homeroomTeacherUid == request.auth.uid; }
+  function attendanceClassMatches(d) { let classRoom = get(/databases/$(database)/documents/classes/$(d.classId)).data; return classRoom.academicYearId == d.academicYearId && classRoom.gradeId == d.gradeId && classRoom.active == true; }
+  function attendanceStudentMatches(d) { let student = get(/databases/$(database)/documents/students/$(d.studentId)).data; return student.academicYearId == d.academicYearId && student.gradeId == d.gradeId && student.classId == d.classId && student.active == true; }
+  function attendancePeriodMatches(d) { let period = get(/databases/$(database)/documents/periods/$(d.periodId)).data; return period.academicYearId == d.academicYearId && period.gradeId == d.gradeId && period.active == true; }
+  function validAttendanceRecord(d, dayId, recordId) { return d.keys().hasOnly(['academicYearId','gradeId','date','classId','studentId','periodId','status','note','markedBy','markedAt','updatedAt']) && d.status in ['present','late','absent','excused','early_leave'] && d.note is string && d.note.size() <= 1000 && d.markedBy == request.auth.uid && d.markedAt is timestamp && d.updatedAt is timestamp && dayId == d.gradeId + '_' + d.date && recordId == d.classId + '__' + d.periodId + '__' + d.studentId && attendanceClassMatches(d) && attendanceStudentMatches(d) && attendancePeriodMatches(d); }
+  function sameAttendanceIdentity(before, after) { return after.academicYearId == before.academicYearId && after.gradeId == before.gradeId && after.date == before.date && after.classId == before.classId && after.studentId == before.studentId && after.periodId == before.periodId; }
+  function attendanceReadable(d) { return owner() || gradeAdmin(d.academicYearId,d.gradeId) || homeroomRecord(d) || dutyAssigned(d.academicYearId,d.gradeId,d.date,d.periodId); }
+  function attendanceWritable(d) { return owner() || gradeAdmin(d.academicYearId,d.gradeId) || dutyEditable(d.academicYearId,d.gradeId,d.date,d.periodId); }
+  function validAudit(d) { return d.keys().hasOnly(['actorUid','actorName','action','targetType','targetId','before','after','source','batchId','batchSize','academicYearId','gradeId','classId','studentId','periodId','dutyDate','timestamp']) && d.keys().hasAll(['actorUid','actorName','action','targetType','targetId','before','after','source','timestamp']) && d.actorUid == request.auth.uid && d.actorName is string && d.action is string && d.targetType is string && d.targetId is string && (d.before == null || d.before is map) && (d.after == null || d.after is map) && d.source in ['manual','excel','system'] && d.timestamp is timestamp; }
+  function scopedAudit(d) { return ('academicYearId' in d) && ('gradeId' in d) && d.academicYearId is string && d.gradeId is string; }
+  function auditReadable(d) { return owner() || (scopedAudit(d) && gradeAdmin(d.academicYearId,d.gradeId)); }
+  function auditWritable(d) { return owner() || (scopedAudit(d) && gradeAdmin(d.academicYearId,d.gradeId)) || (scopedAudit(d) && ('periodId' in d) && ('dutyDate' in d) && d.periodId is string && d.dutyDate is string && dutyEditable(d.academicYearId,d.gradeId,d.dutyDate,d.periodId)); }
 
   match /users/{uid} { allow read: if signedIn() && (uid == request.auth.uid || owner()); allow write: if owner(); }
   match /pendingUsers/{uid} {
@@ -72,9 +88,16 @@ service cloud.firestore { match /databases/{database}/documents {
     allow update: if validException(request.resource.data) && sameExceptionScope(resource.data,request.resource.data) && (owner() || (resource.data.scopeType == 'grade' && gradeAdmin(resource.data.academicYearId,resource.data.gradeId)));
     allow delete: if owner() || (resource.data.scopeType == 'grade' && gradeAdmin(resource.data.academicYearId,resource.data.gradeId));
   }
-  match /attendance/{id}/records/{record} { allow read: if active(); allow write: if legacyAdmin() || legacyDuty(id, request.resource.data.periodId); }
+  match /attendance/{id}/records/{record} {
+    allow read: if attendanceReadable(resource.data);
+    allow create: if validAttendanceRecord(request.resource.data,id,record) && attendanceWritable(request.resource.data);
+    allow update: if validAttendanceRecord(request.resource.data,id,record) && sameAttendanceIdentity(resource.data,request.resource.data) && attendanceWritable(request.resource.data);
+    allow delete: if owner() || gradeAdmin(resource.data.academicYearId,resource.data.gradeId);
+  }
+  // Firestore collection-group history queries require a recursive match in rules v2.
+  match /{path=**}/records/{record} { allow read: if attendanceReadable(resource.data); }
   match /statistics/{id} { allow read, write: if legacyAdmin(); }
   match /settings/{id} { allow read: if active(); allow write: if owner(); }
-  match /auditLogs/{id} { allow read: if legacyAdmin(); allow create: if active() && request.resource.data.actorUid == request.auth.uid; allow update, delete: if false; }
+  match /auditLogs/{id} { allow read: if auditReadable(resource.data); allow create: if validAudit(request.resource.data) && auditWritable(request.resource.data); allow update, delete: if false; }
   match /{document=**} { allow read, write: if false; }
 } }
