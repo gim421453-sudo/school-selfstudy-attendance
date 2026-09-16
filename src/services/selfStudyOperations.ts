@@ -143,10 +143,11 @@ export async function getSelfStudyPermission(scope: SelfStudyScope, studentId: s
 }
 
 export async function saveSelfStudyPermission(value: Omit<SelfStudyPermission, "id" | "approvedAt" | "updatedAt">, actor: AuditActor, before?: SelfStudyPermission | null) {
-  const next = buildSelfStudyPermission(value);
+  const draft = buildSelfStudyPermission(value);
+  const next = before ? { ...draft, approvedByUid: before.approvedByUid } : draft;
   const id = makeSelfStudyPermissionId(next.academicYearId, next.gradeId, next.studentId, next.date);
   const batch = writeBatch(db);
-  batch.set(doc(db, "selfStudyPermissions", id), { ...next, approvedAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
+  batch.set(doc(db, "selfStudyPermissions", id), { ...next, ...(before ? {} : { approvedAt: serverTimestamp() }), updatedAt: serverTimestamp() }, { merge: true });
   appendAuditLog(batch, { actor, action: before ? "SELF_STUDY_PERMISSION_UPDATED" : "SELF_STUDY_PERMISSION_CREATED", targetType: "self_study_permission", targetId: id, before: before ?? null, after: next, academicYearId: next.academicYearId, gradeId: next.gradeId, classId: next.classId, studentId: next.studentId, dutyDate: next.date });
   await batch.commit();
 }

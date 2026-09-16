@@ -14,6 +14,13 @@ export function makeGradeId(academicYearId: string, gradeNumber: number): string
   return `${year}-${gradeNumber}`;
 }
 
+export function makeClassId(academicYearId: string, gradeId: string, classNumber: number): string {
+  const year = assertIdPart(academicYearId, "academic year");
+  const grade = assertIdPart(gradeId, "grade");
+  if (!Number.isInteger(classNumber) || classNumber < 1) throw new Error("Class number must be a positive integer.");
+  return `${year}_${grade}_${classNumber}`;
+}
+
 export function makeStaffAssignmentId(academicYearId: string, gradeId: string, uid: string): string {
   const year = assertIdPart(academicYearId, "학년도");
   const grade = assertIdPart(gradeId, "학년");

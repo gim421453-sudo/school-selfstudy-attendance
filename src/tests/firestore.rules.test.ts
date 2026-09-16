@@ -402,6 +402,43 @@ suite("Firestore security rules", () => {
     await assertSucceeds(getDoc(doc(homeDb, "selfStudyMemberships", "2026_operation-grade_operation-student")));
     await assertFails(getDocs(collection(teacherDb, "users")));
     await assertFails(setDoc(doc(ownerDb, "selfStudyGroups", "wrong-scope"), { ...group, gradeId: "missing-grade" }));
+
+    // D2C1: class-level homeroom lock and permission approval history.
+    {
+    const scope = { academicYearId: "2026", gradeId: "homeroom-grade" };
+    const classOne = { ...scope, classNumber: 1, displayName: "2학년 1반", active: true, homeroomTeacherUid: null, homeroomTeacherName: null };
+    const classTwo = { ...scope, classNumber: 2, displayName: "2학년 2반", active: true, homeroomTeacherUid: null, homeroomTeacherName: null };
+    await env.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await Promise.all([
+        setDoc(doc(db, "users", "home-admin"), user("home-admin", ["teacher"], { globalRoles: ["teacher"] })),
+        setDoc(doc(db, "users", "home-teacher"), user("home-teacher", ["teacher"], { globalRoles: ["teacher"] })),
+        setDoc(doc(db, "grades", "homeroom-grade"), { academicYearId: "2026", gradeNumber: 2, displayName: "2", active: true }),
+        setDoc(doc(db, "staffAssignments", "2026_homeroom-grade_home-admin"), { ...scope, uid: "home-admin", role: "grade_admin", active: true, displayName: "Admin" }),
+        setDoc(doc(db, "staffAssignments", "2026_homeroom-grade_home-teacher"), { ...scope, uid: "home-teacher", role: "teacher", active: true, displayName: "Teacher" }),
+        setDoc(doc(db, "classes", "home-class-1"), classOne),
+        setDoc(doc(db, "classes", "home-class-2"), classTwo),
+        setDoc(doc(db, "students", "home-student"), { ...scope, classId: "home-class-1", studentNo: 1, name: "Student", active: true }),
+      ]);
+    });
+    const adminDb = env.authenticatedContext("home-admin").firestore();
+    const teacherDb = env.authenticatedContext("home-teacher").firestore();
+    const lock = { academicYearId: "2026", gradeId: "homeroom-grade", uid: "home-teacher", classId: "home-class-1", classDisplayName: "2학년 1반", updatedAt: serverTimestamp() };
+    const assign = writeBatch(adminDb);
+    assign.update(doc(adminDb, "classes", "home-class-1"), { homeroomTeacherUid: "home-teacher", homeroomTeacherName: "Teacher", updatedAt: serverTimestamp() });
+    assign.set(doc(adminDb, "homeroomAssignments", "2026_home-teacher"), lock);
+    await assertSucceeds(assign.commit());
+    const duplicate = writeBatch(adminDb);
+    duplicate.update(doc(adminDb, "classes", "home-class-2"), { homeroomTeacherUid: "home-teacher", homeroomTeacherName: "Teacher", updatedAt: serverTimestamp() });
+    duplicate.set(doc(adminDb, "homeroomAssignments", "2026_home-teacher"), { ...lock, classId: "home-class-2", classDisplayName: "2학년 2반" });
+    await assertFails(duplicate.commit());
+    const permission = { ...scope, classId: "home-class-1", studentId: "home-student", date: "2026-09-16", periodIds: ["p1"], reasonCode: "MEDICAL", reasonText: "Clinic", active: true, approvedByUid: "home-teacher", approvedAt: serverTimestamp(), updatedAt: serverTimestamp() };
+    await assertSucceeds(setDoc(doc(teacherDb, "selfStudyPermissions", "2026_homeroom-grade_2026-09-16_home-student"), permission));
+    await assertFails(setDoc(doc(adminDb, "selfStudyPermissions", "2026_homeroom-grade_2026-09-16_home-student"), { ...permission, approvedByUid: "home-admin" }));
+    await assertSucceeds(updateDoc(doc(teacherDb, "selfStudyPermissions", "2026_homeroom-grade_2026-09-16_home-student"), { reasonText: "Follow-up" }));
+    await assertFails(updateDoc(doc(teacherDb, "selfStudyPermissions", "2026_homeroom-grade_2026-09-16_home-student"), { approvedByUid: "home-admin" }));
+    await assertFails(updateDoc(doc(teacherDb, "classes", "home-class-1"), { displayName: "No authority" }));
+    }
   });
 
   it("validates optional StaffAssignment displayName projections without changing authority", async () => {
