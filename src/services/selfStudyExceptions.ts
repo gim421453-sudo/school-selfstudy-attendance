@@ -53,8 +53,10 @@ export async function assertOperationalSelfStudyDate(scopeOrDate: SelfStudyExcep
 }
 
 export async function saveSelfStudyException(value: SelfStudyException, actor: AuditActor, before?: SelfStudyException | null) {
-  validate(value);
-  const next = { ...value, reason: value.reason.trim(), active: value.active !== false };
+  const periodIds = value.periodIds?.length ? value.periodIds : undefined;
+  validate({ ...value, periodIds });
+  const { periodIds: _ignored, ...withoutPeriods } = value;
+  const next = { ...withoutPeriods, reason: value.reason.trim(), active: value.active !== false, ...(periodIds ? { periodIds } : {}) };
   const id = makeSelfStudyExceptionId(next.academicYearId!, next.scopeType!, next.gradeId ?? null, next.date);
   const batch = writeBatch(db);
   batch.set(doc(db, "selfStudyExceptions", id), next, { merge: true });

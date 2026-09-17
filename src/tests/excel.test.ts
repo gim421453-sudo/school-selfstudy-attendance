@@ -75,6 +75,11 @@ describe("safe duty workbook parsing", () => {
     expect(rows.map((row) => row.periodId)).toEqual(["p1", "p2", "p4"]);
     expect(rows.every((row) => !row.error)).toBe(true);
   });
+  it("accepts a Sunday assignment only when its scoped period operates on Sunday", async () => {
+    const periods = [{ id: "p1", name: "Sunday period", order: 1, startTime: "18:00", endTime: "18:30", active: true, operatingDays: [0] }];
+    const rows = await parseDutyWorkbookByPeriod(file([{ date: "2026-09-20", "Sunday period": "teacher@example.com" }]), [teacher], periods);
+    expect(rows[0].error).toBeUndefined();
+  });
   it("reports duplicate dates", async () => {
     const rows = await parseDutyWorkbookBuffer(workbook([dutyRow, dutyRow]), [teacher]);
     expect(rows.every((row) => row.error?.includes("Duplicate"))).toBe(true);

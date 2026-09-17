@@ -1,94 +1,43 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
 import { createPeriod, listScopedPeriods, type ScopedPeriod, updatePeriod } from "../services/scopedPeriods";
 import { useScope } from "../scope/ScopeProvider";
+import { periodScheduleForDay } from "../domain/schedule";
 
-const copy = {
-  title: "\uC790\uC728 \uAD50\uC2DC \uAD00\uB9AC",
-  settings: "\uC790\uC728 \uAD50\uC2DC \uC124\uC815",
-  add: "\uC0C8 \uAD50\uC2DC \uCD94\uAC00",
-  edit: "\uAD50\uC2DC \uC218\uC815",
-  order: "\uC21C\uC11C",
-  name: "\uAD50\uC2DC\uBA85",
-  start: "\uC2DC\uC791 \uC2DC\uAC04",
-  end: "\uC885\uB8CC \uC2DC\uAC04",
-  active: "\uD65C\uC131",
-  inactive: "\uBE44\uD65C\uC131",
-  save: "\uC800\uC7A5",
-  cancel: "\uCDE8\uC18C",
-  editButton: "\uC218\uC815",
-  list: "\uAD50\uC2DC \uBAA9\uB85D",
-};
+const dayLabels = ["일", "월", "화", "수", "목", "금", "토"];
+type DaySchedule = { enabled: boolean; startTime: string; endTime: string };
+type PeriodForm = { name: string; order: number; startTime: string; endTime: string; active: boolean; periodType: "SELF_STUDY" | "BREAK"; scheduleByDay: Record<string, DaySchedule> };
+const emptySchedule = () => Object.fromEntries(dayLabels.map((_, day) => [String(day), { enabled: false, startTime: "18:00", endTime: "18:50" }])) as Record<string, DaySchedule>;
 
-const initialForm = { name: "\uC790\uC728 1\uAD50\uC2DC", order: 1, startTime: "18:00", endTime: "18:50", active: true };
+function formFor(period: ScopedPeriod, day: number): PeriodForm {
+  const scheduleByDay = Object.fromEntries(dayLabels.map((_, day) => [String(day), period.scheduleByDay?.[String(day)] ?? { enabled: (period.operatingDays ?? [1, 2, 3, 4, 5, 6]).includes(day), startTime: period.startTime, endTime: period.endTime }])) as Record<string, DaySchedule>;
+  const resolved = periodScheduleForDay(period, day);
+  return { name: resolved.name, order: resolved.order, startTime: resolved.startTime, endTime: resolved.endTime, active: period.active, periodType: resolved.periodType, scheduleByDay };
+}
+
+function newForm(day: number, periodType: PeriodForm["periodType"], order: number): PeriodForm {
+  const scheduleByDay = emptySchedule(); scheduleByDay[String(day)] = { enabled: true, startTime: periodType === "BREAK" ? "12:00" : "18:00", endTime: periodType === "BREAK" ? "13:00" : "18:50" };
+  return { name: periodType === "BREAK" ? "점심시간" : `${order}자습`, order, startTime: scheduleByDay[String(day)].startTime, endTime: scheduleByDay[String(day)].endTime, active: true, periodType, scheduleByDay };
+}
 
 export function PeriodsPage() {
-  const { appUser } = useAuth();
-  const { scope } = useScope();
-  const [periods, setPeriods] = useState<ScopedPeriod[]>([]);
-  const [form, setForm] = useState(initialForm);
-  const [editing, setEditing] = useState<ScopedPeriod | null>(null);
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-
+  const { appUser } = useAuth(); const { scope, grades } = useScope();
+  const [periods, setPeriods] = useState<ScopedPeriod[]>([]); const [selectedDay, setSelectedDay] = useState(1);
+  const [form, setForm] = useState<PeriodForm | null>(null); const [editing, setEditing] = useState<ScopedPeriod | null>(null);
+  const [error, setError] = useState(""); const [busy, setBusy] = useState(false);
+  const grade = grades.find((item) => item.id === scope?.gradeId);
   async function refresh() { if (scope?.gradeId) setPeriods(await listScopedPeriods(scope.academicYearId, scope.gradeId)); }
   useEffect(() => { void refresh(); }, [scope?.academicYearId, scope?.gradeId]);
-
-  function edit(period: ScopedPeriod) {
-    setEditing(period);
-    setForm({ name: period.name, order: period.order, startTime: period.startTime, endTime: period.endTime, active: period.active });
-    setError("");
-  }
-
-  function cancel() {
-    setEditing(null);
-    setForm(initialForm);
-    setError("");
-  }
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    if (!appUser) return;
-    setBusy(true);
-    setError("");
-    if (!scope?.gradeId) { setError("작업할 학년을 선택하세요."); return; }
-    const period = { ...form, academicYearId: scope.academicYearId, gradeId: scope.gradeId, name: form.name.trim() };
-    try {
-      if (editing) await updatePeriod({ ...period, id: editing.id }, { uid: appUser.uid, name: appUser.displayName }, editing);
-      else await createPeriod(period, { uid: appUser.uid, name: appUser.displayName });
-      await refresh();
-      cancel();
-    } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "\uAD50\uC2DC\uB97C \uC800\uC7A5\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <>
-      <header className="page-header"><div><div className="eyebrow">{copy.settings}</div><h2>{copy.title}</h2></div></header>
-      {!scope?.gradeId ? <section className="empty-state"><h2>작업할 학년을 선택하세요.</h2></section> : <div className="grid two">
-        <form className="card" onSubmit={submit}>
-          <h3>{editing ? copy.edit : copy.add}</h3>
-          <label>{copy.order}<input type="number" min={1} value={form.order} onChange={(event) => setForm({ ...form, order: Number(event.target.value) })} /></label>
-          <label>{copy.name}<input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required /></label>
-          <label>{copy.start}<input type="time" value={form.startTime} onChange={(event) => setForm({ ...form, startTime: event.target.value })} required /></label>
-          <label>{copy.end}<input type="time" value={form.endTime} onChange={(event) => setForm({ ...form, endTime: event.target.value })} required /></label>
-          <label><input type="checkbox" checked={form.active} onChange={(event) => setForm({ ...form, active: event.target.checked })} /> {form.active ? copy.active : copy.inactive}</label>
-          {error && <p className="text-danger">{error}</p>}
-          <div className="button-row"><button className="primary" disabled={busy}>{copy.save}</button>{editing && <button type="button" className="small" onClick={cancel}>{copy.cancel}</button>}</div>
-        </form>
-        <section className="card">
-          <h3>{copy.list}</h3>
-          {periods.map((period) => (
-            <div className="list-item" key={period.id}>
-              <div><strong>{period.name}</strong><span className="muted"> {period.startTime} ~ {period.endTime} · {period.active ? copy.active : copy.inactive}</span></div>
-              <button className="small" onClick={() => edit(period)}>{copy.editButton}</button>
-            </div>
-          ))}
-        </section>
-      </div>}
-    </>
-  );
+  const scheduleFor = (period: ScopedPeriod) => periodScheduleForDay(period, selectedDay);
+  const todayPeriods = useMemo(() => periods.filter((period) => period.active && scheduleFor(period).enabled).sort((left, right) => scheduleFor(left).order - scheduleFor(right).order || scheduleFor(left).startTime.localeCompare(scheduleFor(right).startTime)), [periods, selectedDay]);
+  const currentSummary = todayPeriods.filter((period) => scheduleFor(period).periodType === "SELF_STUDY").length;
+  function openAdd(periodType: PeriodForm["periodType"]) { setEditing(null); setForm(newForm(selectedDay, periodType, periods.reduce((maximum, period) => Math.max(maximum, period.order), 0) + 1)); setError(""); }
+  function openEdit(period: ScopedPeriod) { setEditing(period); setForm(formFor(period, selectedDay)); setError(""); }
+  function changeDay(day: number, patch: Partial<DaySchedule>) { if (form) setForm({ ...form, scheduleByDay: { ...form.scheduleByDay, [String(day)]: { ...form.scheduleByDay[String(day)], ...patch } } }); }
+  function cancel() { setForm(null); setEditing(null); setError(""); }
+  async function save(event: FormEvent) { event.preventDefault(); if (!appUser || !scope?.gradeId || !form) return; const scheduleByDay = { ...form.scheduleByDay, [String(selectedDay)]: { enabled: form.scheduleByDay[String(selectedDay)].enabled, name: form.name.trim(), order: form.order, periodType: form.periodType, startTime: form.scheduleByDay[String(selectedDay)].startTime, endTime: form.scheduleByDay[String(selectedDay)].endTime } }; const operatingDays = Object.entries(scheduleByDay).filter(([, value]) => value.enabled).map(([day]) => Number(day)); setBusy(true); setError(""); const value = { ...form, scheduleByDay, academicYearId: scope.academicYearId, gradeId: scope.gradeId, operatingDays, name: editing?.name ?? form.name.trim(), order: editing?.order ?? form.order, periodType: editing?.periodType ?? form.periodType, startTime: editing?.startTime ?? form.startTime, endTime: editing?.endTime ?? form.endTime }; try { if (editing) await updatePeriod({ ...value, id: editing.id }, { uid: appUser.uid, name: appUser.displayName }, editing); else await createPeriod(value, { uid: appUser.uid, name: appUser.displayName }); await refresh(); cancel(); } catch (caught) { setError(caught instanceof Error ? caught.message : "시간표를 저장하지 못했습니다."); } finally { setBusy(false); } }
+  async function deactivate(period: ScopedPeriod) { if (!appUser || !scope?.gradeId || !window.confirm("이 시간을 비활성화할까요?")) return; setBusy(true); setError(""); try { const scheduleByDay = { ...formFor(period, selectedDay).scheduleByDay, [String(selectedDay)]: { ...periodScheduleForDay(period, selectedDay), enabled: false } }; await updatePeriod({ ...period, scheduleByDay, operatingDays: Object.entries(scheduleByDay).filter(([, value]) => value.enabled).map(([day]) => Number(day)) }, { uid: appUser.uid, name: appUser.displayName }, period); await refresh(); } catch { setError("시간을 삭제하지 못했습니다."); } finally { setBusy(false); } }
+  async function applyMondayToWeekdays() { if (!appUser || !scope?.gradeId || !window.confirm("현재 시간표를 월~금요일에 반영할까요?")) return; setBusy(true); setError(""); try { for (const period of periods) { const source = periodScheduleForDay(period, selectedDay); const scheduleByDay = { ...formFor(period, selectedDay).scheduleByDay, ...Object.fromEntries([1, 2, 3, 4, 5].map((day) => [String(day), { ...source }])) }; await updatePeriod({ ...period, scheduleByDay, operatingDays: Object.entries(scheduleByDay).filter(([, value]) => value.enabled).map(([day]) => Number(day)) }, { uid: appUser.uid, name: appUser.displayName }, period); } await refresh(); } catch (caught) { setError(caught instanceof Error ? caught.message : "월~금 시간표를 반영하지 못했습니다."); } finally { setBusy(false); } }
+  if (!scope?.gradeId) return <section className="empty-state"><h2>작업할 학년을 선택하세요.</h2></section>;
+  return <><header className="page-header"><div><div className="eyebrow">{scope.academicYearId}학년도 &gt; {grade?.displayName ?? "선택 학년"}</div><h2>자습 시간표 관리</h2><p className="muted">요일을 선택하여 해당 날의 자습과 휴식 시간표를 확인하고 수정합니다.</p></div></header><section className="card"><div className="button-row" role="tablist" aria-label="요일 선택">{dayLabels.map((label, day) => <button key={day} type="button" className={selectedDay === day ? "active" : ""} onClick={() => setSelectedDay(day)}>{label}</button>)}</div><p className="muted">{dayLabels[selectedDay]}요일: {todayPeriods.length ? `자습 ${currentSummary}개, 전체 ${todayPeriods.length}개 시간` : "운영 안 함"}</p></section><section className="card"><div className="button-row"><h3>{dayLabels[selectedDay]}요일 시간표</h3>{selectedDay >= 1 && selectedDay <= 5 && <button type="button" className="small" disabled={busy} onClick={() => void applyMondayToWeekdays()}>현재 시간표를 월~금에 반영</button>}</div>{todayPeriods.length === 0 ? <p className="muted">운영 안 함</p> : todayPeriods.map((period) => { const schedule = scheduleFor(period); const isBreak = schedule.periodType === "BREAK"; return <div className="list-item" key={period.id}><div><span className={isBreak ? "muted" : "badge"}>{isBreak ? "점심/휴식" : "자습"}</span><strong> {schedule.name}</strong><p className="muted">{schedule.startTime} ~ {schedule.endTime}</p></div><div className="button-row"><button type="button" className="small" onClick={() => openEdit(period)}>수정</button><button type="button" className="small" disabled={busy} onClick={() => void deactivate(period)}>삭제</button></div></div>; })}<div className="button-row"><button type="button" className="primary" onClick={() => openAdd("SELF_STUDY")}>+ 자습시간 추가</button><button type="button" onClick={() => openAdd("BREAK")}>+ 점심/휴식 추가</button></div></section>{form && <form className="card" onSubmit={save}><h3>{editing ? "시간 수정" : "시간 추가"}</h3><label>시간명<input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label><label>순서<input type="number" min={1} value={form.order} onChange={(event) => setForm({ ...form, order: Number(event.target.value) })} /></label><label>시작 시간<input type="time" required value={form.scheduleByDay[String(selectedDay)].startTime} onChange={(event) => changeDay(selectedDay, { startTime: event.target.value })} /></label><label>종료 시간<input type="time" required value={form.scheduleByDay[String(selectedDay)].endTime} onChange={(event) => changeDay(selectedDay, { endTime: event.target.value })} /></label><label><input type="checkbox" checked={form.scheduleByDay[String(selectedDay)].enabled} onChange={(event) => changeDay(selectedDay, { enabled: event.target.checked })} /> {dayLabels[selectedDay]}요일 운영</label><div className="button-row"><button className="primary" disabled={busy}>저장</button><button type="button" onClick={cancel}>취소</button></div></form>}{error && <p className="text-danger">{error}</p>}</>;
 }

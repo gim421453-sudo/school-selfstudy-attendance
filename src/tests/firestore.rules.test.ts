@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, beforeEach, describe, it } from "vitest";
 import { assertFails, assertSucceeds, initializeTestEnvironment, type RulesTestEnvironment } from "@firebase/rules-unit-testing";
-import { collection, collectionGroup, deleteDoc, doc, getDoc, getDocs, query, serverTimestamp, setDoc, Timestamp, updateDoc, where, writeBatch } from "firebase/firestore";
+import { collection, collectionGroup, deleteDoc, doc, getDoc, getDocs, orderBy, query, serverTimestamp, setDoc, Timestamp, updateDoc, where, writeBatch } from "firebase/firestore";
 
 const suite = process.env.FIRESTORE_EMULATOR_HOST ? describe : describe.skip;
 let env: RulesTestEnvironment;
@@ -138,6 +138,32 @@ suite("Firestore security rules", () => {
     await assertSucceeds(setDoc(doc(adminA, "periods", "scoped-p2"), { academicYearId: "2026", gradeId: "2026-1", name: "P2", order: 2, active: true }));
     await assertFails(setDoc(doc(adminA, "students", "bad"), { academicYearId: "2026", gradeId: "2026-1", classId: "scoped-c2", studentNo: 2, name: "Bad", active: true }));
     await assertSucceeds(getDocs(query(collection(teacherA, "classes"), where("academicYearId", "==", "2026"), where("gradeId", "==", "2026-1"))));
+  });
+
+  it("allows a staff member to bootstrap only the active year and assigned grade", async () => {
+    await env.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await Promise.all([
+        setDoc(doc(db, "users", "scopeTeacher"), { ...user("scopeTeacher", ["teacher"]), globalRoles: ["teacher"] }),
+        setDoc(doc(db, "users", "scopeAdmin"), { ...user("scopeAdmin", ["teacher"]), globalRoles: ["teacher"] }),
+        setDoc(doc(db, "academicYears", "2026"), { displayName: "2026", active: true, isCurrent: true }),
+        setDoc(doc(db, "academicYears", "2025"), { displayName: "2025", active: false, isCurrent: false }),
+        setDoc(doc(db, "grades", "2026-1"), { academicYearId: "2026", gradeNumber: 1, displayName: "1", active: true }),
+        setDoc(doc(db, "grades", "2026-2"), { academicYearId: "2026", gradeNumber: 2, displayName: "2", active: true }),
+        setDoc(doc(db, "staffAssignments", "2026_2026-2_scopeTeacher"), { academicYearId: "2026", gradeId: "2026-2", uid: "scopeTeacher", role: "teacher", active: true }),
+        setDoc(doc(db, "staffAssignments", "2026_2026-2_scopeAdmin"), { academicYearId: "2026", gradeId: "2026-2", uid: "scopeAdmin", role: "grade_admin", active: true }),
+      ]);
+    });
+    const teacherDb = env.authenticatedContext("scopeTeacher").firestore();
+    await assertSucceeds(getDocs(query(collection(teacherDb, "academicYears"), where("active", "==", true))));
+    await assertSucceeds(getDocs(query(collection(teacherDb, "staffAssignments"), where("uid", "==", "scopeTeacher"))));
+    await assertFails(getDocs(query(collection(teacherDb, "staffAssignments"), where("uid", "==", "scopeAdmin"))));
+    await assertSucceeds(getDoc(doc(teacherDb, "grades", "2026-2")));
+    await assertFails(getDoc(doc(teacherDb, "grades", "2026-1")));
+    const adminDb = env.authenticatedContext("scopeAdmin").firestore();
+    await assertSucceeds(getDocs(query(collection(adminDb, "academicYears"), where("active", "==", true))));
+    await assertSucceeds(getDocs(query(collection(adminDb, "staffAssignments"), where("uid", "==", "scopeAdmin"))));
+    await assertSucceeds(getDoc(doc(adminDb, "grades", "2026-2")));
   });
 
   it("enforces Duty V2 parent, child, batch, query, and exception scope rules", async () => {
@@ -473,15 +499,36 @@ suite("Firestore security rules", () => {
       await Promise.all([
         setDoc(doc(db,"users","d3-supervisor"),user("d3-supervisor",["teacher"],{globalRoles:["teacher"]})), setDoc(doc(db,"users","d3-other"),user("d3-other",["teacher"],{globalRoles:["teacher"]})), setDoc(doc(db,"users","d3-admin"),user("d3-admin",["teacher"],{globalRoles:["teacher"]})),
         setDoc(doc(db,"grades","d3-attendance-grade"),{academicYearId:"2026",gradeNumber:1,displayName:"1",active:true}), setDoc(doc(db,"staffAssignments","2026_d3-attendance-grade_d3-supervisor"),{...scope,uid:"d3-supervisor",role:"teacher",active:true}), setDoc(doc(db,"staffAssignments","2026_d3-attendance-grade_d3-other"),{...scope,uid:"d3-other",role:"teacher",active:true}), setDoc(doc(db,"staffAssignments","2026_d3-attendance-grade_d3-admin"),{...scope,uid:"d3-admin",role:"grade_admin",active:true}),
-        setDoc(doc(db,"classes","d3-class"),{...scope,classNumber:1,displayName:"1-1",active:true,homeroomTeacherUid:"d3-supervisor"}), setDoc(doc(db,"students","d3-student"),{...scope,classId:"d3-class",studentNo:1,name:"Student",active:true}), setDoc(doc(db,"students","d3-inactive-member"),{...scope,classId:"d3-class",studentNo:2,name:"Inactive",active:true}),
+        setDoc(doc(db,"classes","d3-class"),{...scope,classNumber:1,displayName:"1-1",active:true,homeroomTeacherUid:"d3-other"}), setDoc(doc(db,"students","d3-student"),{...scope,classId:"d3-class",studentNo:1,name:"Student",active:true}), setDoc(doc(db,"students","d3-batch-student"),{...scope,classId:"d3-class",studentNo:2,name:"Batch",active:true}), setDoc(doc(db,"students","d3-inactive-member"),{...scope,classId:"d3-class",studentNo:3,name:"Inactive",active:true}),
         setDoc(doc(db,"periods",periodId),{...scope,name:"P1",order:1,startTime:"18:00",endTime:"18:50",active:true}), setDoc(doc(db,"selfStudyGroups",groupId),{...scope,displayName:"Group",type:"REGULAR",active:true,sortOrder:1}), setDoc(doc(db,"selfStudyGroupPeriods",`${groupId}_${periodId}`),{...scope,groupId,periodId,active:true,updatedAt:Timestamp.now()}),
-        setDoc(doc(db,"selfStudyMemberships","2026_d3-attendance-grade_d3-student"),{...scope,studentId:"d3-student",classId:"d3-class",selfStudyGroupId:groupId,active:true,updatedAt:Timestamp.now()}), setDoc(doc(db,"selfStudyMemberships","2026_d3-attendance-grade_d3-inactive-member"),{...scope,studentId:"d3-inactive-member",classId:"d3-class",selfStudyGroupId:groupId,active:false,updatedAt:Timestamp.now()}),
+        setDoc(doc(db,"selfStudyMemberships","2026_d3-attendance-grade_d3-student"),{...scope,studentId:"d3-student",classId:"d3-class",selfStudyGroupId:groupId,active:true,updatedAt:Timestamp.now()}), setDoc(doc(db,"selfStudyMemberships","2026_d3-attendance-grade_d3-batch-student"),{...scope,studentId:"d3-batch-student",classId:"d3-class",selfStudyGroupId:groupId,active:true,updatedAt:Timestamp.now()}), setDoc(doc(db,"selfStudyMemberships","2026_d3-attendance-grade_d3-inactive-member"),{...scope,studentId:"d3-inactive-member",classId:"d3-class",selfStudyGroupId:groupId,active:false,updatedAt:Timestamp.now()}),
         setDoc(doc(db,"supervisionAssignments",`d3-attendance-grade_${date}_${periodId}_${groupId}_d3-supervisor`),{...scope,date,periodId,selfStudyGroupId:groupId,teacherUid:"d3-supervisor",teacherDisplayName:"Supervisor",active:true,...window,updatedAt:Timestamp.now()}), setDoc(doc(db,"selfStudyPermissions",`2026_d3-attendance-grade_${date}_d3-student`),{...scope,classId:"d3-class",studentId:"d3-student",date,periodIds:[periodId],reasonCode:"MEDICAL",reasonText:"Clinic",active:true,approvedByUid:"d3-supervisor",approvedAt:Timestamp.now(),updatedAt:Timestamp.now()}),
       ]);
     });
     const base = { ...scope,date,periodId,studentId:"d3-student",classId:"d3-class",selfStudyGroupId:groupId,status:"PRESENT",recordedByUid:"d3-supervisor",recordedAt:serverTimestamp(),updatedByUid:"d3-supervisor",updatedAt:serverTimestamp(),schemaVersion:1 };
-    const id = `2026_d3-attendance-grade_${date}_${periodId}_d3-student`; const supervisor = env.authenticatedContext("d3-supervisor").firestore(); const other = env.authenticatedContext("d3-other").firestore(); const admin = env.authenticatedContext("d3-admin").firestore();
+    const id = `2026_d3-attendance-grade_${date}_${periodId}_d3-student`; const supervisor = env.authenticatedContext("d3-supervisor").firestore(); const other = env.authenticatedContext("d3-other").firestore(); const admin = env.authenticatedContext("d3-admin").firestore(); const ownerDb = env.authenticatedContext("owner").firestore();
+    await assertSucceeds(getDoc(doc(supervisor, "supervisionAssignments", `d3-attendance-grade_${date}_${periodId}_${groupId}_d3-supervisor`)));
+    await assertSucceeds(getDocs(query(collection(supervisor, "students"), where("academicYearId", "==", scope.academicYearId), where("gradeId", "==", scope.gradeId), orderBy("classId"), orderBy("studentNo"))));
+    await assertSucceeds(getDocs(query(collection(supervisor, "selfStudyMemberships"), where("academicYearId", "==", scope.academicYearId), where("gradeId", "==", scope.gradeId), orderBy("studentId"))));
+    await assertSucceeds(getDocs(query(collection(supervisor, "selfStudyGroups"), where("academicYearId", "==", scope.academicYearId), where("gradeId", "==", scope.gradeId), orderBy("sortOrder"))));
+    await assertSucceeds(getDocs(query(collection(supervisor, "selfStudyGroupPeriods"), where("academicYearId", "==", scope.academicYearId), where("gradeId", "==", scope.gradeId), orderBy("periodId"))));
+    await assertFails(getDoc(doc(supervisor, "selfStudyPermissions", `2026_d3-attendance-grade_${date}_d3-student`)));
+    await assertFails(getDoc(doc(supervisor, "supervisionAssignments", `d3-attendance-grade_2026-09-19_${periodId}_${groupId}_d3-supervisor`)));
     await assertSucceeds(setDoc(doc(supervisor,"selfStudyAttendanceRecords",id),base));
+    await assertSucceeds(getDocs(query(collection(supervisor, "selfStudyAttendanceRecords"), where("academicYearId", "==", scope.academicYearId), where("gradeId", "==", scope.gradeId), where("date", "==", date), where("periodId", "==", periodId), where("selfStudyGroupId", "==", groupId), orderBy("studentId"))));
+    const supervisorUpdate = writeBatch(supervisor);
+    supervisorUpdate.update(doc(supervisor, "selfStudyAttendanceRecords", id), { status: "UNEXCUSED_ABSENCE", updatedByUid: "d3-supervisor", updatedAt: serverTimestamp() });
+    supervisorUpdate.set(doc(supervisor, "auditLogs", "d3-attendance-supervisor-update"), { actorUid: "d3-supervisor", actorName: "Supervisor", action: "SELF_STUDY_ATTENDANCE_UPDATED", targetType: "self_study_attendance", targetId: id, before: { status: "PRESENT" }, after: { status: "UNEXCUSED_ABSENCE" }, source: "manual", academicYearId: scope.academicYearId, gradeId: scope.gradeId, classId: "d3-class", studentId: "d3-student", periodId, selfStudyGroupId: groupId, dutyDate: date, timestamp: serverTimestamp() });
+    await assertSucceeds(supervisorUpdate.commit());
+    const adminCorrection = writeBatch(admin);
+    adminCorrection.update(doc(admin, "selfStudyAttendanceRecords", id), { status: "PRESENT", updatedByUid: "d3-admin", updatedAt: serverTimestamp() });
+    adminCorrection.set(doc(admin, "auditLogs", "d3-attendance-admin-correction"), { actorUid: "d3-admin", actorName: "Admin", action: "SELF_STUDY_ATTENDANCE_CORRECTED", targetType: "self_study_attendance", targetId: id, before: { status: "UNEXCUSED_ABSENCE" }, after: { status: "PRESENT" }, source: "manual", academicYearId: scope.academicYearId, gradeId: scope.gradeId, classId: "d3-class", studentId: "d3-student", periodId, selfStudyGroupId: groupId, dutyDate: date, timestamp: serverTimestamp() });
+    await assertSucceeds(adminCorrection.commit());
+    const recordAndAudit = writeBatch(ownerDb);
+    const batchId = `2026_d3-attendance-grade_${date}_${periodId}_d3-batch-student`;
+    recordAndAudit.set(doc(ownerDb, "selfStudyAttendanceRecords", batchId), { ...base, studentId: "d3-batch-student", recordedByUid: "owner", updatedByUid: "owner" });
+    recordAndAudit.set(doc(ownerDb, "auditLogs", "d3-attendance-audit"), { actorUid: "owner", actorName: "Owner", action: "SELF_STUDY_ATTENDANCE_CREATED", targetType: "self_study_attendance", targetId: batchId, before: null, after: { status: "PRESENT" }, source: "manual", academicYearId: scope.academicYearId, gradeId: scope.gradeId, classId: "d3-class", studentId: "d3-batch-student", periodId, selfStudyGroupId: groupId, dutyDate: date, timestamp: serverTimestamp() });
+    await assertSucceeds(recordAndAudit.commit());
     await assertFails(setDoc(doc(supervisor,"selfStudyAttendanceRecords",`${id}_forged-excuse`),{...base,status:"EXCUSED_ABSENCE",permissionId:"forged",permissionReasonCode:"MEDICAL",permissionReasonText:"forged"}));
     await assertFails(setDoc(doc(other,"selfStudyAttendanceRecords",id),{...base,recordedByUid:"d3-other",updatedByUid:"d3-other"}));
     await assertFails(setDoc(doc(supervisor,"selfStudyAttendanceRecords",`${id}_wrong-group`),{...base,selfStudyGroupId:"wrong-group"}));

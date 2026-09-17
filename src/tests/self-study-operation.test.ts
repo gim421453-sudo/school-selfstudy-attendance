@@ -2,12 +2,18 @@ import { describe, expect, it } from "vitest";
 import { makeSelfStudyAttendanceRecordId, makeSelfStudyGroupPeriodId, makeSelfStudyMembershipId, makeSelfStudyPermissionId, makeSupervisionAssignmentId } from "../domain/ids";
 import { SELF_STUDY_ATTENDANCE_LABELS, buildBulkPresentDraft, buildSelfStudyAttendanceRows, canUseExcusedAbsence, countUnenteredSelfStudyAttendance, isSelfStudySupervisorEditable, resolveSelfStudyAttendanceDisplayStatus, resolveSelfStudyAttendanceStatus, selectInitialSelfStudyGroupId } from "../domain/selfStudyOperation";
 import { buildSelfStudyGroup, buildSelfStudyGroupPeriod, buildSelfStudyMembership, buildSelfStudyPermission, buildSupervisionAssignment, supervisedGroupIdsForTeacher } from "../services/selfStudyOperations";
-import { buildSelfStudyAttendanceRecord } from "../services/selfStudyAttendance";
+import { buildSelfStudyAttendanceRecord, canReadSelfStudyPermissionForAttendance } from "../services/selfStudyAttendance";
+import { auditEventData } from "../services/audit";
 import type { SelfStudyPermission } from "../types/domain";
 
 const scope = { academicYearId: "2026", gradeId: "2026-1" };
 
 describe("self-study operation domain", () => {
+  it("does not require a supervisor to read student permission documents for assigned attendance", () => {
+    expect(canReadSelfStudyPermissionForAttendance({ isSystemOwner: false, isGradeAdmin: false })).toBe(false);
+    expect(canReadSelfStudyPermissionForAttendance({ isGradeAdmin: true })).toBe(true);
+    expect(canReadSelfStudyPermissionForAttendance({ isSystemOwner: true })).toBe(true);
+  });
   it("keeps groups scoped and maps arbitrary, non-contiguous periods", () => {
     const group = buildSelfStudyGroup({ ...scope, displayName: "Regular A", type: "REGULAR", active: true, sortOrder: 1 });
     const p1 = buildSelfStudyGroupPeriod({ ...scope, groupId: "group-a", periodId: "p1", active: true });
@@ -64,6 +70,11 @@ describe("self-study operation domain", () => {
   it("uses one deterministic D3 attendance identity per student, date, and period", () => {
     expect(makeSelfStudyAttendanceRecordId("2026", "2026-1", "2026-09-18", "p1", "student-1")).toBe("2026_2026-1_2026-09-18_p1_student-1");
     expect(makeSelfStudyAttendanceRecordId("2026", "2026-1", "2026-09-18", "p1", "student-1")).not.toBe(makeSelfStudyAttendanceRecordId("2026", "2026-1", "2026-09-18", "p2", "student-1"));
+  });
+
+  it("keeps the canonical attendance audit payload scoped to the same record identity", () => {
+    const data = auditEventData({ actor: { uid: "teacher", name: "Teacher" }, action: "SELF_STUDY_ATTENDANCE_CREATED", targetType: "self_study_attendance", targetId: "2026_2026-1_2026-09-18_p1_student-1", before: null, after: { status: "PRESENT" }, academicYearId: "2026", gradeId: "2026-1", classId: "class-1", studentId: "student-1", periodId: "p1", selfStudyGroupId: "group-a", dutyDate: "2026-09-18" });
+    expect(data).toMatchObject({ actorUid: "teacher", targetType: "self_study_attendance", academicYearId: "2026", gradeId: "2026-1", periodId: "p1", selfStudyGroupId: "group-a", dutyDate: "2026-09-18" });
   });
 
   it("keeps permission as an absence reason, not an automatic absence", () => {

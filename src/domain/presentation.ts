@@ -1,43 +1,16 @@
 import type { AppUser, SelfStudyAttendanceStatus } from "../types/domain";
 
-const globalRoleLabels: Record<string, string> = {
-  system_owner: "최고관리자",
-  teacher: "교직원",
-};
+const globalRoleLabels: Record<string, string> = { system_owner: "\uCD5C\uACE0\uAD00\uB9AC\uC790", teacher: "\uAD50\uC9C1\uC6D0" };
+const attendanceLabels: Record<SelfStudyAttendanceStatus | "MISSING", string> = { PRESENT: "\uCD9C\uC11D", EXCUSED_ABSENCE: "\uC778\uC815 \uACB0\uC11D", UNEXCUSED_ABSENCE: "\uBB34\uB2E8 \uACB0\uC11D", MISSING: "\uBBF8\uC785\uB825" };
+const permissionReasonLabels: Record<string, string> = { ACADEMY: "\uD559\uC6D0", MEDICAL: "\uBCD1\uC6D0/\uC758\uB8CC", FAMILY: "\uAC00\uC815\uC0AC", SCHOOL_ACTIVITY: "\uD559\uAD50\uD65C\uB3D9", OTHER: "\uAE30\uD0C0" };
+const auditActionLabels: Record<string, string> = { CLASS_CREATED: "\uBC18 \uC0DD\uC131", CLASS_UPDATED: "\uBC18 \uC218\uC815", HOMEROOM_ASSIGNED: "\uB2F4\uC784 \uC9C0\uC815", STUDENT_CREATED: "\uD559\uC0DD \uB4F1\uB85D", STUDENT_UPDATED: "\uD559\uC0DD \uC218\uC815", PERIOD_CREATED: "\uAD50\uC2DC \uC0DD\uC131", PERIOD_UPDATED: "\uAD50\uC2DC \uC218\uC815", SUPERVISION_ASSIGNMENT_CREATED: "\uAC10\uB3C5 \uBC30\uC815", SUPERVISION_ASSIGNMENT_UPDATED: "\uAC10\uB3C5 \uBCC0\uACBD", SELF_STUDY_ATTENDANCE_CREATED: "\uC790\uC2B5 \uCD9C\uACB0 \uC785\uB825", SELF_STUDY_ATTENDANCE_UPDATED: "\uC790\uC2B5 \uCD9C\uACB0 \uC218\uC815", SELF_STUDY_ATTENDANCE_CORRECTED: "\uC790\uC2B5 \uCD9C\uACB0 \uBCF4\uC815", SELF_STUDY_PERMISSION_CREATED: "\uC790\uC2B5 \uD5C8\uB77D \uB4F1\uB85D", SELF_STUDY_PERMISSION_UPDATED: "\uC790\uC2B5 \uD5C8\uB77D \uC218\uC815", SELF_STUDY_EXCEPTION_CREATED: "\uC6B4\uC601 \uC608\uC678 \uB4F1\uB85D", SELF_STUDY_EXCEPTION_UPDATED: "\uC6B4\uC601 \uC608\uC678 \uC218\uC815", SELF_STUDY_EXCEPTION_DEACTIVATED: "\uC6B4\uC601 \uC608\uC678 \uBE44\uD65C\uC131\uD654" };
+const auditTargetLabels: Record<string, string> = { class: "\uBC18", student: "\uD559\uC0DD", period: "\uAD50\uC2DC", self_study_group: "\uC790\uC2B5 \uADF8\uB8F9", supervision_assignment: "\uAC10\uB3C5 \uBC30\uC815", self_study_attendance: "\uC790\uC2B5 \uCD9C\uACB0", self_study_permission: "\uC790\uC2B5 \uD5C8\uB77D", self_study_exception: "\uC6B4\uC601 \uC608\uC678", staff_assignment: "\uAD50\uC9C1\uC6D0 \uBC30\uC815", academic_year: "\uD559\uB144\uB3C4", grade: "\uD559\uB144", user: "\uAD50\uC9C1\uC6D0 \uACC4\uC815" };
 
-const attendanceLabels: Record<SelfStudyAttendanceStatus | "MISSING", string> = {
-  PRESENT: "출석",
-  EXCUSED_ABSENCE: "인정 결석",
-  UNEXCUSED_ABSENCE: "무단 결석",
-  MISSING: "미입력",
-};
-
-const permissionReasonLabels: Record<string, string> = {
-  ACADEMY: "학원",
-  MEDICAL: "병원/의료",
-  FAMILY: "가정사",
-  SCHOOL_ACTIVITY: "학교활동",
-  OTHER: "기타",
-};
-
-export function formatGlobalRoles(user: Pick<AppUser, "globalRoles">): string {
-  const labels = (user.globalRoles ?? ["teacher"]).map((role) => globalRoleLabels[role] ?? "교직원");
-  return [...new Set(labels)].join(", ");
-}
-
-export function formatAttendanceStatus(status: SelfStudyAttendanceStatus | "MISSING"): string {
-  return attendanceLabels[status];
-}
-
-export function formatPermissionReason(code: string | undefined): string {
-  return code ? permissionReasonLabels[code] ?? "기타" : "";
-}
-
-export function displayNameOrFallback(name: string | null | undefined, fallback: string): string {
-  return name?.trim() || fallback;
-}
-
-export function safeLoadError(context: string, error: unknown, fallback = "정보를 불러오지 못했습니다. 다시 시도해 주세요."): string {
-  console.error(`[${context}]`, error);
-  return fallback;
-}
+export function formatGlobalRoles(user: Pick<AppUser, "globalRoles">): string { return [...new Set((user.globalRoles ?? ["teacher"]).map((role) => globalRoleLabels[role] ?? globalRoleLabels.teacher))].join(", "); }
+export function formatAttendanceStatus(status: SelfStudyAttendanceStatus | "MISSING"): string { return attendanceLabels[status]; }
+export function formatPermissionReason(code: string | undefined): string { return code ? permissionReasonLabels[code] ?? permissionReasonLabels.OTHER : ""; }
+export function formatAuditAction(value: string): string { return auditActionLabels[value] ?? "\uAE30\uD0C0 \uBCC0\uACBD"; }
+export function formatAuditTarget(value: string): string { return auditTargetLabels[value] ?? "\uAE30\uD0C0 \uB300\uC0C1"; }
+export function formatAuditSource(value?: string): string { return value === "system" ? "\uCD08\uAE30 \uC124\uC815" : value === "excel" ? "Excel" : "\uC218\uB3D9 \uC791\uC5C5"; }
+export function displayNameOrFallback(name: string | null | undefined, fallback: string): string { return name?.trim() || fallback; }
+export function safeLoadError(context: string, error: unknown, fallback = "\uC815\uBCF4\uB97C \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4. \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694."): string { console.error(`[${context}]`, error); return fallback; }

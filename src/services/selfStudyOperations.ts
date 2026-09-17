@@ -6,6 +6,7 @@ import { appendAuditLog, type AuditActor } from "./audit";
 import { getClass } from "./classes";
 import { getScopedPeriod } from "./scopedPeriods";
 import { getStudent } from "./scopedStudents";
+import { isSelfStudyPeriod } from "../domain/schedule";
 
 export interface SelfStudyScope { academicYearId: string; gradeId: string; }
 
@@ -129,8 +130,9 @@ async function validateActiveSupervisionReferences(value: Omit<SupervisionAssign
     getDoc(doc(db, "staffAssignments", makeStaffAssignmentId(value.academicYearId, value.gradeId, value.teacherUid))),
   ]);
   const inScope = (snapshot: typeof group) => snapshot.exists() && snapshot.data().academicYearId === value.academicYearId && snapshot.data().gradeId === value.gradeId;
+  const periodData = period.data();
   if (!inScope(group) || group.data()?.active !== true) throw new Error("활성 자습 그룹이 필요합니다.");
-  if (!inScope(period) || period.data()?.active !== true) throw new Error("활성 자습 교시가 필요합니다.");
+  if (!inScope(period) || !periodData || periodData.active !== true || !isSelfStudyPeriod(periodData)) throw new Error("활성 자습 교시가 필요합니다.");
   if (!inScope(groupPeriod) || groupPeriod.data()?.groupId !== value.selfStudyGroupId || groupPeriod.data()?.periodId !== value.periodId || groupPeriod.data()?.active !== true) throw new Error("해당 자습 그룹은 이 교시에 운영되지 않습니다.");
   if (!inScope(staff) || staff.data()?.uid !== value.teacherUid || staff.data()?.active !== true || !["teacher", "grade_admin"].includes(staff.data()?.role)) throw new Error("해당 학년의 활성 교직원 배정이 필요합니다.");
 }
@@ -142,6 +144,18 @@ export async function saveSupervisionAssignment(value: Omit<SupervisionAssignmen
   const batch = writeBatch(db);
   batch.set(doc(db, "supervisionAssignments", id), { ...next, updatedAt: serverTimestamp() }, { merge: true });
   appendAuditLog(batch, { actor, action: before ? "SUPERVISION_ASSIGNMENT_UPDATED" : "SUPERVISION_ASSIGNMENT_CREATED", targetType: "supervision_assignment", targetId: id, before: before ?? null, after: next, academicYearId: next.academicYearId, gradeId: next.gradeId, periodId: next.periodId, dutyDate: next.date });
+  await batch.commit();
+}
+
+export async function saveSupervisionAssignments(values: Array<{ value: Omit<SupervisionAssignment, "id" | "updatedAt">; before?: SupervisionAssignment | null }>, actor: AuditActor) {
+  const nextValues = values.map(({ value, before }) => ({ next: buildSupervisionAssignment(value), before: before ?? null }));
+  await Promise.all(nextValues.map(({ next }) => validateActiveSupervisionReferences(next)));
+  const batch = writeBatch(db);
+  for (const { next, before } of nextValues) {
+    const id = makeSupervisionAssignmentId(next.gradeId, next.date, next.periodId, next.selfStudyGroupId, next.teacherUid);
+    batch.set(doc(db, "supervisionAssignments", id), { ...next, updatedAt: serverTimestamp() }, { merge: true });
+    appendAuditLog(batch, { actor, action: before ? "SUPERVISION_ASSIGNMENT_UPDATED" : "SUPERVISION_ASSIGNMENT_CREATED", targetType: "supervision_assignment", targetId: id, before, after: next, academicYearId: next.academicYearId, gradeId: next.gradeId, periodId: next.periodId, dutyDate: next.date });
+  }
   await batch.commit();
 }
 
@@ -185,7 +199,7 @@ async function validatePermissionReferences(value: Omit<SelfStudyPermission, "id
   if (!group.exists() || group.data().active !== true || group.data().academicYearId !== value.academicYearId || group.data().gradeId !== value.gradeId) throw new Error("활성 자습 그룹이 필요합니다.");
   await Promise.all(value.periodIds.map(async (periodId) => {
     const [period, edge] = await Promise.all([getScopedPeriod(periodId), getDoc(doc(db, "selfStudyGroupPeriods", makeSelfStudyGroupPeriodId(membership.data().selfStudyGroupId, periodId)))]);
-    if (!period?.active || period.academicYearId !== value.academicYearId || period.gradeId !== value.gradeId || !edge.exists() || edge.data().active !== true) throw new Error("선택한 교시는 해당 학생의 활성 자습 운영 교시가 아닙니다.");
+    if (!period?.active || !isSelfStudyPeriod(period) || period.academicYearId !== value.academicYearId || period.gradeId !== value.gradeId || !edge.exists() || edge.data().active !== true) throw new Error("선택한 교시는 해당 학생의 활성 자습 운영 교시가 아닙니다.");
   }));
 }
 

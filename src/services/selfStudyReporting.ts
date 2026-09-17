@@ -8,13 +8,14 @@ export interface SelfStudyAttendanceCounts { total: number; present: number; exc
 
 export async function listSelfStudyAttendanceHistory(filter: SelfStudyHistoryFilter): Promise<SelfStudyAttendanceRecord[]> {
   const constraints = [where("academicYearId", "==", filter.academicYearId), where("gradeId", "==", filter.gradeId), where("date", ">=", filter.startDate), where("date", "<=", filter.endDate)];
-  if (filter.classId) constraints.push(where("classId", "==", filter.classId));
-  if (filter.selfStudyGroupId) constraints.push(where("selfStudyGroupId", "==", filter.selfStudyGroupId));
-  if (filter.periodId) constraints.push(where("periodId", "==", filter.periodId));
-  if (filter.studentId) constraints.push(where("studentId", "==", filter.studentId));
-  if (filter.status) constraints.push(where("status", "==", filter.status));
   const snapshot = await getDocs(query(collection(db, "selfStudyAttendanceRecords"), ...constraints, orderBy("date", "desc"), orderBy("periodId"), orderBy("studentId")));
-  return snapshot.docs.map((item) => ({ id: item.id, ...(item.data() as Omit<SelfStudyAttendanceRecord, "id">) }));
+  return snapshot.docs.map((item) => ({ id: item.id, ...(item.data() as Omit<SelfStudyAttendanceRecord, "id">) })).filter((record) =>
+    (!filter.classId || record.classId === filter.classId)
+    && (!filter.selfStudyGroupId || record.selfStudyGroupId === filter.selfStudyGroupId)
+    && (!filter.periodId || record.periodId === filter.periodId)
+    && (!filter.studentId || record.studentId === filter.studentId)
+    && (!filter.status || record.status === filter.status),
+  );
 }
 
 export function summarizeSelfStudyAttendance(records: SelfStudyAttendanceRecord[]): SelfStudyAttendanceCounts {

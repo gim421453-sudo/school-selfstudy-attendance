@@ -121,6 +121,12 @@ export interface Period {
   startTime: string;
   endTime: string;
   active: boolean;
+  /** Omitted legacy values are self-study periods. */
+  periodType?: "SELF_STUDY" | "BREAK";
+  /** JavaScript day numbers (0 = Sunday through 6 = Saturday). Absent legacy data defaults to Monday-Saturday. */
+  operatingDays?: number[];
+  /** Optional canonical per-day block overrides. Legacy documents continue to use base values. */
+  scheduleByDay?: Partial<Record<string, { enabled: boolean; name?: string; order?: number; periodType?: "SELF_STUDY" | "BREAK"; startTime: string; endTime: string }>>;
 }
 
 export interface DutyPeriodAssignment {

@@ -3,8 +3,9 @@ import { buildGradeDashboardDiagnostics } from "../domain/dashboardDiagnostics";
 
 const scope = { academicYearId: "2026", gradeId: "g1" };
 describe("dashboard diagnostics", () => {
+  const periods = [{ id: "p1", ...scope, name: "자습 1교시", order: 1, startTime: "18:00", endTime: "18:50", active: true, operatingDays: [1, 2, 3, 4, 5, 6] }];
   it("keeps grade diagnostics isolated and separates missing input from unexcused absence", () => {
-    const result = buildGradeDashboardDiagnostics({ date: "2026-09-21", operationalDay: true,
+    const result = buildGradeDashboardDiagnostics({ date: "2026-09-21", periods,
       students: [{ id: "s1", ...scope, classId: "c1", studentNo: 1, name: "A", active: true }, { id: "s2", ...scope, classId: "c1", studentNo: 2, name: "B", active: true }],
       classes: [{ id: "c1", ...scope, classNumber: 1, displayName: "1", active: true }], groups: [{ id: "group", ...scope, displayName: "G", type: "REGULAR", active: true, sortOrder: 1 }],
       memberships: [{ id: "m1", ...scope, studentId: "s1", classId: "c1", selfStudyGroupId: "group", active: true }], edges: [{ id: "edge", ...scope, groupId: "group", periodId: "p1", active: true }],
@@ -14,7 +15,7 @@ describe("dashboard diagnostics", () => {
     expect(result).toMatchObject({ studentCount: 2, unassignedStudentCount: 1, missingGradeAdmin: true, missingHomeroomCount: 1, missingSupervisionCount: 1, unexcusedCount: 1, missingAttendanceCount: 0 });
   });
   it("excludes one selected period without affecting another", () => {
-    const common = { date: "2026-09-21", operationalDay: true, students: [], classes: [], groups: [{ id: "g", ...scope, displayName: "G", type: "REGULAR" as const, active: true, sortOrder: 1 }], memberships: [], assignments: [], supervision: [], attendance: [], exceptions: [{ ...scope, scopeType: "grade" as const, date: "2026-09-21", reasonType: "exam" as const, reason: "x", active: true, periodIds: ["p1"] }] };
+    const common = { date: "2026-09-21", periods: [...periods, { ...periods[0], id: "p2", order: 2 }], students: [], classes: [], groups: [{ id: "g", ...scope, displayName: "G", type: "REGULAR" as const, active: true, sortOrder: 1 }], memberships: [], assignments: [], supervision: [], attendance: [], exceptions: [{ ...scope, scopeType: "grade" as const, date: "2026-09-21", reasonType: "exam" as const, reason: "x", active: true, periodIds: ["p1"] }] };
     expect(buildGradeDashboardDiagnostics({ ...common, edges: [{ id: "p1", ...scope, groupId: "g", periodId: "p1", active: true }, { id: "p2", ...scope, groupId: "g", periodId: "p2", active: true }] }).missingSupervisionCount).toBe(1);
   });
 });

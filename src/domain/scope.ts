@@ -130,3 +130,9 @@ export function resolveSchoolScope(years: AcademicYear[], grades: Grade[], assig
 export function hasConcreteGradeScope(scope: SchoolScope | null): scope is Scope {
   return Boolean(scope?.gradeId);
 }
+
+export function scopeBootstrapView(loading: boolean, error: string | null, scope: SchoolScope | null): "loading" | "error" | "missing" | "ready" {
+  if (loading) return "loading";
+  if (error) return "error";
+  return scope ? "ready" : "missing";
+}

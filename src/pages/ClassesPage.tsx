@@ -73,7 +73,7 @@ export function ClassesPage() {
   if (!scoped) return <section className="empty-state"><h2>학년을 선택하세요.</h2><p>전체 학년 범위에서는 반을 관리할 수 없습니다.</p></section>;
 
   return <>
-    <header className="page-header"><div><div className="eyebrow">CLASS / HOMEROOM</div><h2>반 및 담임 관리</h2></div></header>
+    <header className="page-header"><div><div className="eyebrow">CLASS / HOMEROOM</div><h2>학급 / 담임 관리</h2><p className="muted">학생이 실제 수업을 듣는 학교 학급과 담임교사를 관리합니다. 자습반·정독실 등 자습 운영 그룹과는 별개의 정보입니다.</p></div></header>
     {message && <div className="empty-state"><p className="text-danger">{message}</p></div>}
     <div className="grid two">
       <form className="card" onSubmit={(event) => void create(event)}>

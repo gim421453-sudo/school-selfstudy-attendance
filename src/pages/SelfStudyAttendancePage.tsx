@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
 import { isGradeAdminForGrade, isSystemOwner } from "../domain/scope";
+import { isPeriodOperatingOn, periodScheduleForDate } from "../domain/schedule";
+import { safeLoadError } from "../domain/presentation";
 import { buildBulkPresentDraft, countUnenteredSelfStudyAttendance, isSelfStudySupervisorEditable, resolveSelfStudyAttendanceDisplayStatus, selectInitialSelfStudyGroupId, SELF_STUDY_ATTENDANCE_LABELS, type SelfStudyAttendanceDraft } from "../domain/selfStudyOperation";
 import { listScopedPeriods, type ScopedPeriod } from "../services/scopedPeriods";
 import { listSelfStudyAttendanceReadRows, writeSelfStudyAttendance } from "../services/selfStudyAttendance";
@@ -66,7 +68,7 @@ export function SelfStudyAttendancePage() {
   }, [currentScope?.academicYearId, currentScope?.gradeId, appUser?.uid, date, privileged]);
 
   const activeAssignments = useMemo(() => allAssignments.filter((assignment) => assignment.active && periods.some((period) => period.active && period.id === assignment.periodId) && groups.some((group) => group.active && group.id === assignment.selfStudyGroupId) && edges.some((edge) => edge.active && edge.groupId === assignment.selfStudyGroupId && edge.periodId === assignment.periodId)), [allAssignments, periods, groups, edges]);
-  const availablePeriods = useMemo(() => periods.filter((period) => period.active && activeAssignments.some((assignment) => assignment.periodId === period.id)), [periods, activeAssignments]);
+  const availablePeriods = useMemo(() => periods.filter((period) => period.active && isPeriodOperatingOn(date, period) && activeAssignments.some((assignment) => assignment.periodId === period.id)).map((period) => ({ ...period, ...periodScheduleForDate(period, date) })), [date, periods, activeAssignments]);
 
   useEffect(() => {
     if (!availablePeriods.some((period) => period.id === periodId)) setPeriodId(availablePeriods[0]?.id ?? "");
@@ -146,8 +148,10 @@ export function SelfStudyAttendancePage() {
       const refreshed = await listSelfStudyAttendanceReadRows({ ...currentScope, teacherUid: actor.uid, date, periodId, selfStudyGroupId: groupId, access: { isSystemOwner: owner, isGradeAdmin: gradeAdmin } });
       setRows(refreshed);
     } catch (caught) {
+      console.error("[selfStudyAttendanceSave]", caught);
       setDrafts(remaining);
       setError(caught instanceof Error ? `저장에 실패했습니다. ${caught.message}` : "저장에 실패했습니다. 네트워크 상태를 확인한 뒤 다시 시도하세요.");
+      setError(safeLoadError("selfStudyAttendanceSave", caught, "\uCD9C\uACB0\uC744 \uC800\uC7A5\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4. \uC120\uD0DD\uD55C \uD559\uB144, \uAD50\uC2DC, \uC790\uC2B5\uADF8\uB8F9 \uBC0F \uC6B4\uC601 \uC0C1\uD0DC\uB97C \uD655\uC778\uD558\uC138\uC694."));
     } finally { setSaving(false); }
   }
 
@@ -155,7 +159,7 @@ export function SelfStudyAttendancePage() {
   if (!currentScope) return <section className="empty-state"><h2>학년을 선택하세요.</h2><p>자습 출결은 특정 학년 범위에서만 입력할 수 있습니다.</p></section>;
 
   return <section className="self-study-attendance-page">
-    <header className="page-header"><div><div className="eyebrow">자습 출결</div><h2>{privileged ? "관리자 출결 보정" : "담당 자습 출결"}</h2></div></header>
+    <header className="page-header"><div><div className="eyebrow">자습 출결</div><h2>{privileged ? "관리자 출결 보정" : "담당 자습 출결"}</h2><p className="muted">감독교사가 실제 자습그룹 학생의 출석 여부를 기록하는 화면입니다.</p></div></header>
     <section className="card attendance-controls" aria-label="자습 출결 선택">
       <label>날짜<input type="date" value={date} disabled={saving} onChange={(event) => changeDate(event.target.value)} /></label>
       <label>교시<select value={periodId} disabled={saving || availablePeriods.length === 0} onChange={(event) => changePeriod(event.target.value)}>{availablePeriods.map((period) => <option key={period.id} value={period.id}>{period.name} ({period.startTime}~{period.endTime})</option>)}</select></label>

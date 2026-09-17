@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, getDocs, orderBy, query, writeBatch } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, orderBy, query, where, writeBatch } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import type { AcademicYear } from "../types/domain";
 import { appendAuditLog, type AuditActor } from "./audit";
@@ -11,6 +11,14 @@ function validateAcademicYear(value: AcademicYear) {
 export async function listAcademicYears(): Promise<AcademicYear[]> {
   const snapshot = await getDocs(query(collection(db, "academicYears"), orderBy("displayName")));
   return snapshot.docs.map((item) => ({ id: item.id, ...(item.data() as Omit<AcademicYear, "id">) }));
+}
+
+/** The staff scope bootstrap must not query inactive years it cannot read. */
+export async function listActiveAcademicYears(): Promise<AcademicYear[]> {
+  const snapshot = await getDocs(query(collection(db, "academicYears"), where("active", "==", true)));
+  return snapshot.docs
+    .map((item) => ({ id: item.id, ...(item.data() as Omit<AcademicYear, "id">) }))
+    .sort((left, right) => left.displayName.localeCompare(right.displayName));
 }
 
 export async function getAcademicYear(id: string): Promise<AcademicYear | null> {

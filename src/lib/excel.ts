@@ -311,7 +311,6 @@ export async function parseDutyWorkbookByPeriod(file: File, users: AppUser[], pe
       const matchedUser = teacherEmail ? users.find((user) => user.active && user.email.toLowerCase() === teacherEmail) : users.filter((user) => user.active && user.displayName.trim() === teacherName).length === 1 ? users.find((user) => user.active && user.displayName.trim() === teacherName) : undefined;
       let error = "";
       if (!date) error = "Invalid or missing date.";
-      else if (!isSelfStudyDay(date)) error = SUNDAY_DUTY_MESSAGE;
       else if (!matchedUser) error = "No active teacher matches this period assignment.";
       result.push({ rowNo: index + 2, date, periodId: period.id, periodName: period.name, teacherName, teacherEmail, matchedUser, error: error || undefined });
     }

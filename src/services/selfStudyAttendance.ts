@@ -4,6 +4,7 @@ import { resolveSelfStudyAttendanceStatus } from "../domain/selfStudyOperation";
 import { db } from "../lib/firebase";
 import type { SelfStudyAttendanceReadRow, SelfStudyAttendanceRecord, SelfStudyPermission } from "../types/domain";
 import { appendAuditLog, type AuditActor } from "./audit";
+import { isPeriodOperatingOn, isSelfStudyPeriod, NON_OPERATING_PERIOD_MESSAGE } from "../domain/schedule";
 import { getClass } from "./classes";
 import { getScopedPeriod } from "./scopedPeriods";
 import { getStudent, listScopedStudents } from "./scopedStudents";
@@ -15,6 +16,18 @@ export interface SelfStudyAttendanceAccess { isSystemOwner?: boolean; isGradeAdm
 export interface SelfStudyAttendanceWriteInput extends SelfStudyAttendanceScope {
   date: string; periodId: string; studentId: string; classId: string; selfStudyGroupId: string;
   absenceSelected: boolean; actor: AuditActor; access?: SelfStudyAttendanceAccess;
+}
+
+export function canReadSelfStudyPermissionForAttendance(access: Pick<SelfStudyAttendanceAccess, "isSystemOwner" | "isGradeAdmin"> | undefined) {
+  return Boolean(access?.isSystemOwner || access?.isGradeAdmin);
+}
+
+async function attendanceReadStage<T>(collectionName: string, action: "get" | "query", load: () => Promise<T>) {
+  try { return await load(); }
+  catch (caught) {
+    console.error("[selfStudyAttendanceRead]", { collection: collectionName, action, code: typeof caught === "object" && caught !== null && "code" in caught ? caught.code : undefined });
+    throw caught;
+  }
 }
 
 function validateScope(scope: SelfStudyAttendanceScope) {
@@ -55,17 +68,19 @@ async function validateWriteReferences(input: SelfStudyAttendanceWriteInput) {
   validateScope(input); validateDate(input.date);
   await assertOperationalSelfStudyDate({ academicYearId: input.academicYearId, gradeId: input.gradeId }, input.date, input.periodId);
   const scope = { academicYearId: input.academicYearId, gradeId: input.gradeId };
+  const canReadPermission = canReadSelfStudyPermissionForAttendance(input.access);
   const [student, classRoom, period, membership, group, groupPeriod, supervision, permission] = await Promise.all([
     getStudent(input.studentId), getClass(input.classId), getScopedPeriod(input.periodId),
     getDoc(doc(db, "selfStudyMemberships", makeSelfStudyMembershipId(input.academicYearId, input.gradeId, input.studentId))),
     getDoc(doc(db, "selfStudyGroups", input.selfStudyGroupId)),
     getDoc(doc(db, "selfStudyGroupPeriods", makeSelfStudyGroupPeriodId(input.selfStudyGroupId, input.periodId))),
     getDoc(doc(db, "supervisionAssignments", makeSupervisionAssignmentId(input.gradeId, input.date, input.periodId, input.selfStudyGroupId, input.actor.uid))),
-    getSelfStudyPermission(scope, input.studentId, input.date),
+    canReadPermission ? getSelfStudyPermission(scope, input.studentId, input.date) : Promise.resolve(null),
   ]);
   if (!student?.active || student.academicYearId !== input.academicYearId || student.gradeId !== input.gradeId || student.classId !== input.classId) throw new Error("학생 scope가 일치하지 않습니다.");
   if (!classRoom?.active || classRoom.academicYearId !== input.academicYearId || classRoom.gradeId !== input.gradeId) throw new Error("반 scope가 일치하지 않습니다.");
-  if (!period?.active || period.academicYearId !== input.academicYearId || period.gradeId !== input.gradeId) throw new Error("활성 자습 교시가 아닙니다.");
+  if (!period?.active || !isSelfStudyPeriod(period) || period.academicYearId !== input.academicYearId || period.gradeId !== input.gradeId) throw new Error("활성 자습 교시가 아닙니다.");
+  if (period && !isPeriodOperatingOn(input.date, period)) throw new Error(NON_OPERATING_PERIOD_MESSAGE);
   const sameScope = (value: { academicYearId?: string; gradeId?: string } | undefined) => value?.academicYearId === input.academicYearId && value.gradeId === input.gradeId;
   if (!membership.exists() || !sameScope(membership.data()) || membership.data().active !== true || membership.data().classId !== input.classId || membership.data().selfStudyGroupId !== input.selfStudyGroupId) throw new Error("학생의 활성 자습 그룹 배정이 일치하지 않습니다.");
   if (!group.exists() || !sameScope(group.data()) || group.data().active !== true) throw new Error("활성 자습 그룹이 아닙니다.");
@@ -92,15 +107,24 @@ export async function writeSelfStudyAttendance(input: SelfStudyAttendanceWriteIn
 
 export async function listSelfStudyAttendanceReadRows(input: SelfStudyAttendanceScope & { teacherUid: string; date: string; periodId: string; selfStudyGroupId: string; access?: Pick<SelfStudyAttendanceAccess, "isSystemOwner" | "isGradeAdmin"> }): Promise<SelfStudyAttendanceReadRow[]> {
   const scope = { academicYearId: input.academicYearId, gradeId: input.gradeId };
-  const supervision = await getDoc(doc(db, "supervisionAssignments", makeSupervisionAssignmentId(input.gradeId, input.date, input.periodId, input.selfStudyGroupId, input.teacherUid)));
+  const supervision = await attendanceReadStage("supervisionAssignments", "get", () => getDoc(doc(db, "supervisionAssignments", makeSupervisionAssignmentId(input.gradeId, input.date, input.periodId, input.selfStudyGroupId, input.teacherUid))));
   const privileged = input.access?.isSystemOwner || input.access?.isGradeAdmin;
   if (!privileged && (!supervision.exists() || supervision.data().active !== true || supervision.data().teacherUid !== input.teacherUid)) return [];
-  const [students, memberships, groups, groupPeriods, records] = await Promise.all([listScopedStudents(scope), listSelfStudyMemberships(scope), listSelfStudyGroups(scope), listSelfStudyGroupPeriods(scope), listSelfStudyAttendanceRecords(scope, input.date, input.periodId, input.selfStudyGroupId)]);
+  const [students, memberships, groups, groupPeriods, records] = await Promise.all([
+    attendanceReadStage("students", "query", () => listScopedStudents(scope)),
+    attendanceReadStage("selfStudyMemberships", "query", () => listSelfStudyMemberships(scope)),
+    attendanceReadStage("selfStudyGroups", "query", () => listSelfStudyGroups(scope)),
+    attendanceReadStage("selfStudyGroupPeriods", "query", () => listSelfStudyGroupPeriods(scope)),
+    attendanceReadStage("selfStudyAttendanceRecords", "query", () => listSelfStudyAttendanceRecords(scope, input.date, input.periodId, input.selfStudyGroupId)),
+  ]);
   const group = groups.find((item) => item.id === input.selfStudyGroupId && item.active);
   if (!group || !groupPeriods.some((item) => item.active && item.groupId === group.id && item.periodId === input.periodId)) return [];
   const recordByStudent = new Map(records.map((item) => [item.studentId, item]));
   return (await Promise.all(students.filter((student) => student.active && memberships.some((membership) => membership.active && membership.studentId === student.id && membership.selfStudyGroupId === group.id)).map(async (student) => {
-    const [classRoom, permission] = await Promise.all([getClass(student.classId), getSelfStudyPermission(scope, student.id, input.date)]);
+    const [classRoom, permission] = await Promise.all([
+      attendanceReadStage("classes", "get", () => getClass(student.classId)),
+      canReadSelfStudyPermissionForAttendance(input.access) ? attendanceReadStage("selfStudyPermissions", "get", () => getSelfStudyPermission(scope, student.id, input.date)) : Promise.resolve(null),
+    ]);
     const record = recordByStudent.get(student.id);
     return { studentId: student.id, studentName: student.name, classId: student.classId, classDisplayName: classRoom?.displayName ?? student.classId, selfStudyGroupId: group.id, selfStudyGroupDisplayName: group.displayName, existingAttendanceStatus: record?.status ?? null, hasPermission: Boolean(permission?.active && permission.periodIds.includes(input.periodId)), ...(permission?.active && permission.periodIds.includes(input.periodId) ? { permissionPeriodIds: permission.periodIds, permissionReasonCode: permission.reasonCode, permissionReasonText: permission.reasonText } : {}) };
   }))).sort((left, right) => left.classDisplayName.localeCompare(right.classDisplayName) || left.studentName.localeCompare(right.studentName));

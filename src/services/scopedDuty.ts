@@ -1,6 +1,7 @@
 import { Timestamp, writeBatch } from "firebase/firestore";
 import type { DutyPeriodImportRow } from "../lib/excel";
 import { makeDutyAssignmentId } from "../domain/ids";
+import { isPeriodOperatingOn, NON_OPERATING_PERIOD_MESSAGE } from "../domain/schedule";
 import { db } from "../lib/firebase";
 import type { AppUser, DutyAssignment, DutyPeriodAssignment } from "../types/domain";
 import { appendAuditLog, type AuditActor } from "./audit";
@@ -46,6 +47,7 @@ async function validateTeacher(input: ScopedDutyInput) {
 
 async function validatePeriod(input: ScopedDutyInput): Promise<ScopedPeriod> {
   const period = await getScopedPeriod(input.periodId);
+  if (period && !isPeriodOperatingOn(input.date, period)) throw new Error(NON_OPERATING_PERIOD_MESSAGE);
   if (!period?.active || period.academicYearId !== input.academicYearId || period.gradeId !== input.gradeId) throw new Error("선택한 scope에 활성 교시가 없습니다.");
   return period;
 }
@@ -93,7 +95,9 @@ export function buildScopedDutyImportPreview(scope: DutyScope, rows: DutyPeriodI
     rows: rows.map((row) => {
       if (row.error) return row;
       if (blockedDates.has(row.date)) return { ...row, error: "Selected scope is not operating on this date." };
-      if (!periodIds.has(row.periodId)) return { ...row, error: "Period is not active in the selected scope." };
+      const period = activePeriods.find((item) => item.id === row.periodId);
+      if (!periodIds.has(row.periodId) || !period) return { ...row, error: "Period is not active in the selected scope." };
+      if (!isPeriodOperatingOn(row.date, period)) return { ...row, error: "Period is not operating on this date." };
       if (!row.matchedUser || !teacherIds.has(row.matchedUser.uid)) return { ...row, error: "Teacher is not eligible for the selected scope." };
       return row;
     }),

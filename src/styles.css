@@ -18,12 +18,14 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   display: flex; flex-direction: column; gap: 28px; justify-content: space-between;
   background: #111827; color: white;
 }
+.sidebar-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.sidebar-close, .mobile-menu-toggle { display: none; }
 .sidebar h1 { font-size: 19px; margin: 12px 0 3px; }
 .brand-mark {
   width: 42px; height: 42px; display: grid; place-items: center;
   border-radius: 14px; background: white; color: #111827; font-weight: 800;
 }
-.sidebar nav { display: grid; gap: 6px; }
+.sidebar nav { display: grid; gap: 6px; flex: 1; min-height: 0; overflow-y: auto; align-content: start; padding-right: 2px; }
 .sidebar nav a {
   color: #cbd5e1; text-decoration: none; padding: 11px 12px; border-radius: 10px;
 }
@@ -77,6 +79,8 @@ input, select {
 .small { min-height: 32px; padding: 6px 9px; background: #edf1f5; color: #3b4758; font-size: 12px; }
 .small.active { background: #111827; color: white; }
 .button-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.button-row > label:last-child { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; margin: 0; padding: 0 10px; border: 1px solid #d9e0e9; border-radius: 999px; color: #526176; font-size: 12px; }
+.button-row > label:last-child input[type="checkbox"] { width: 16px; min-height: 16px; margin: 0; padding: 0; }
 .duty-readout { margin-left: auto; padding-bottom: 10px; }
 .table-wrap { overflow: auto; }
 table { width: 100%; border-collapse: collapse; }
@@ -103,7 +107,24 @@ th { color: #687588; font-size: 12px; }
 
 @media (max-width: 900px) {
   .app-shell { grid-template-columns: 1fr; }
-  .sidebar { position: relative; height: auto; }
+  .sidebar-drawer {
+    position: fixed; inset: 0 auto 0 0; z-index: 30; width: min(320px, 88vw); height: 100dvh;
+    padding: 20px 18px; transform: translateX(-105%); visibility: hidden; pointer-events: none;
+    transition: transform 180ms ease, visibility 0s linear 180ms;
+    box-shadow: 12px 0 28px rgba(15, 23, 42, .2);
+  }
+  .sidebar-drawer.sidebar-open { transform: translateX(0); visibility: visible; pointer-events: auto; transition: transform 180ms ease, visibility 0s; }
+  .sidebar-close, .mobile-menu-toggle {
+    display: inline-grid; place-items: center; width: 44px; height: 44px; min-width: 44px; min-height: 44px;
+    padding: 0; border-radius: 8px; background: transparent; color: #e2e8f0; font-size: 29px; line-height: 1;
+  }
+  .sidebar-close:hover, .sidebar-close:focus-visible { background: #253047; color: white; }
+  .mobile-menu-toggle {
+    position: fixed; top: 12px; left: 12px; z-index: 10; background: #111827; color: white; font-size: 23px;
+    box-shadow: 0 3px 10px rgba(15, 23, 42, .18);
+  }
+  .sidebar-backdrop { position: fixed; inset: 0; z-index: 20; border: 0; border-radius: 0; padding: 0; background: rgba(15, 23, 42, .36); }
+  .content { padding-top: 70px; }
   .grid.three, .grid.two { grid-template-columns: 1fr; }
   .content { padding: 22px; }
   .toolbar { align-items: stretch; flex-direction: column; }
@@ -149,6 +170,28 @@ code { background: #eef2f7; padding: 2px 5px; border-radius: 5px; }
 .attendance-controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; position: sticky; top: 0; z-index: 3; }
 .attendance-controls label { margin: 0; }
 .self-study-counts { display: flex; flex-wrap: wrap; gap: 8px 14px; color: #526176; font-size: 13px; }
+.supervision-calendar { display: grid; gap: 8px; }
+.supervision-calendar-toolbar { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.supervision-calendar-toolbar strong { min-width: 150px; text-align: center; }
+.supervision-calendar-weekdays, .supervision-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.supervision-calendar-weekdays span { padding: 6px 0; color: #687588; text-align: center; font-size: 12px; font-weight: 800; }
+.supervision-calendar-day, .supervision-calendar-empty { min-width: 0; min-height: 108px; border: 1px solid #e2e8f0; border-radius: 8px; }
+.supervision-calendar-empty { background: #f8fafc; }
+.supervision-calendar-day { display: grid; align-content: start; gap: 4px; padding: 10px; background: white; color: #526176; text-align: left; box-shadow: none; }
+.supervision-calendar-day:hover { border-color: #64748b; background: #f8fafc; }
+.supervision-calendar-day strong { color: #152033; font-size: 16px; }
+.supervision-calendar-day span { font-size: 12px; line-height: 1.25; }
+.supervision-calendar-day.is-today { outline: 2px solid #cbd5e1; outline-offset: -2px; }
+.supervision-calendar-day.is-selected { border-color: #111827; background: #eef2f7; }
+.calendar-missing { color: #b4232d; font-weight: 800; }
+
+@media (max-width: 700px) {
+  .supervision-calendar-weekdays, .supervision-calendar-grid { gap: 3px; }
+  .supervision-calendar-day, .supervision-calendar-empty { min-height: 78px; border-radius: 5px; }
+  .supervision-calendar-day { padding: 6px; gap: 2px; }
+  .supervision-calendar-day strong { font-size: 14px; }
+  .supervision-calendar-day span { font-size: 10px; }
+}
 .self-study-student-list { display: grid; gap: 10px; }
 .self-study-student-card { border: 1px solid #dbe4ed; border-radius: 8px; background: #fff; padding: 14px; }
 .student-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
