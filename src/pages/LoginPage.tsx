@@ -16,9 +16,12 @@ const copy = {
 };
 
 export function LoginPage() {
-  const { firebaseUser, appUser, pendingUser, loading, loginWithGoogle, logout } = useAuth();
+  const { firebaseUser, appUser, pendingUser, loading, loginWithGoogle, loginWithDevlogTest, logout } = useAuth();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [testEmail, setTestEmail] = useState("devlog-admin@example.test");
+  const [testPassword, setTestPassword] = useState("");
+  const testMode = import.meta.env.VITE_DEVLOG_SCREENSHOT_TEST_MODE === "1";
 
   if (canEnterApplication(firebaseUser, appUser)) return <Navigate to="/" replace />;
 
@@ -32,6 +35,13 @@ export function LoginPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function signInTest() {
+    setBusy(true); setError("");
+    try { await loginWithDevlogTest(testEmail, testPassword); }
+    catch (loginError) { setError(loginError instanceof Error ? loginError.message : String(loginError)); }
+    finally { setBusy(false); }
   }
 
   if (loading) return <div className="center-page">{copy.checking}</div>;
@@ -58,6 +68,12 @@ export function LoginPage() {
         <button className="primary google-login-button" onClick={() => void signIn()} disabled={busy}>
           {busy ? copy.signingIn : copy.signIn}
         </button>
+        {testMode && <form className="devlog-test-login" onSubmit={(event) => { event.preventDefault(); void signInTest(); }}>
+          <div className="eyebrow">개발일지 캡처용 로컬 테스트</div>
+          <label>테스트 이메일<input aria-label="테스트 이메일" type="email" value={testEmail} onChange={(event) => setTestEmail(event.target.value)} /></label>
+          <label>테스트 비밀번호<input aria-label="테스트 비밀번호" type="password" value={testPassword} onChange={(event) => setTestPassword(event.target.value)} /></label>
+          <button type="submit" className="secondary" disabled={busy}>테스트 환경 로그인</button>
+        </form>}
         <p className="muted">{copy.staffOnly}</p>
         {error && <div className="error-box">{error}</div>}
       </div>

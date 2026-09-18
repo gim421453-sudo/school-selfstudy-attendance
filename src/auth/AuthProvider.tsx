@@ -3,6 +3,7 @@ import {
   onAuthStateChanged,
   signInWithPopup,
   signOut,
+  signInWithEmailAndPassword,
   type User,
 } from "firebase/auth";
 import {
@@ -25,6 +26,7 @@ interface AuthContextValue {
   loading: boolean;
   loginWithGoogle(): Promise<void>;
   logout(): Promise<void>;
+  loginWithDevlogTest(email: string, password: string): Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -72,11 +74,21 @@ export function AuthProvider({ children }: PropsWithChildren) {
       async logout() {
         await signOut(auth);
       },
+      async loginWithDevlogTest(email, password) {
+        if (import.meta.env.VITE_DEVLOG_SCREENSHOT_TEST_MODE !== "1") throw new Error("Test login is disabled.");
+        await signInWithEmailAndPassword(auth, email, password);
+      },
     }),
     [firebaseUser, appUser, pendingUser, loading],
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  const devlogAuthState = import.meta.env.VITE_DEVLOG_SCREENSHOT_TEST_MODE === "1"
+    ? (loading ? "loading" : firebaseUser && appUser ? "ready" : firebaseUser ? "profile-not-ready" : "signed-out")
+    : undefined;
+  return <AuthContext.Provider value={value}>
+    {devlogAuthState && <span data-devlog-auth-state={devlogAuthState} hidden />}
+    {children}
+  </AuthContext.Provider>;
 }
 
 export function useAuth() {

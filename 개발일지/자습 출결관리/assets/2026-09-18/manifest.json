@@ -1,0 +1,62 @@
+{
+  "generatedAt": "2026-09-18T02:14:33.269Z",
+  "mode": "full",
+  "testMode": true,
+  "screenshots": [],
+  "skipped": [
+    {
+      "file": "03-supervisor-calendar.png",
+      "title": "감독교사 배정 캘린더",
+      "route": "/supervision",
+      "category": "감독교사 배정",
+      "reason": "감독교사 배정과 월간 캘린더 변경을 보여 줍니다.",
+      "viewport": "1440x900",
+      "createdAt": "2026-09-18T02:13:30.467Z",
+      "relatedChanges": [
+        "src/pages/SupervisionPage.tsx",
+        "src/domain/supervisionCalendar.ts",
+        "src/domain/supervisionUi.ts",
+        "src/services/selfStudyOperations.ts"
+      ],
+      "publishCandidate": false,
+      "requiresRedaction": false,
+      "notes": "UI_READY_TIMEOUT: route-specific content was not rendered",
+      "status": "CAPTURE_FAILED"
+    },
+    {
+      "file": "04-my-supervision.png",
+      "title": "내 감독교사 일정",
+      "route": "/my-supervision",
+      "category": "감독교사 일정",
+      "reason": "교사별 감독 일정 조회 변경을 보여 줍니다.",
+      "viewport": "1440x900",
+      "createdAt": "2026-09-18T02:14:01.790Z",
+      "relatedChanges": [
+        "src/pages/MySupervisionPage.tsx"
+      ],
+      "publishCandidate": false,
+      "requiresRedaction": false,
+      "notes": "UI_READY_TIMEOUT: route-specific content was not rendered",
+      "status": "CAPTURE_FAILED"
+    },
+    {
+      "file": "05-statistics-filter.png",
+      "title": "자습 출결 통계 필터",
+      "route": "/self-study-statistics",
+      "category": "출결 통계",
+      "reason": "기간·범위 필터와 통계 집계 변경을 보여 줍니다.",
+      "viewport": "1440x900",
+      "createdAt": "2026-09-18T02:14:33.109Z",
+      "relatedChanges": [
+        "src/pages/SelfStudyStatisticsPage.tsx",
+        "src/domain/selfStudyStatistics.ts",
+        "src/domain/statisticsPresentation.ts",
+        "src/services/selfStudyReporting.ts"
+      ],
+      "publishCandidate": false,
+      "requiresRedaction": false,
+      "notes": "UI_READY_TIMEOUT: route-specific content was not rendered",
+      "status": "CAPTURE_FAILED"
+    }
+  ]
+}

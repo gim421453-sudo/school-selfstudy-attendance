@@ -198,3 +198,9 @@ Recommended local verification order:
 Enable Google as a Firebase Authentication sign-in provider in the Firebase Console before using this application. Add every local, Tailscale, and hosted URL used to open the app to Firebase Authentication Authorized domains.
 
 Google authentication proves identity only. Application access still requires a manually created `users/{uid}` Firestore document with `active: true`; that document remains the source of display name, roles, and homeroom assignment. The first `system_owner` must be created manually in the Firebase Console after obtaining the Google Auth UID.
+
+## Development-log screenshots
+
+Use `npm run devlog:screenshots` to collect blog attachment candidates into `개발일지/자습 출결관리/assets/YYYY-MM-DD/`. The default `changed` mode selects only routes directly related to the current Git changes; use `npm run devlog:screenshots -- --mode full` to consider all registered major screens.
+
+The command never logs in, bypasses CAPTCHA, reads a production Firebase environment, or captures a page unless an operator explicitly sets `DEVLOG_SCREENSHOT_TEST_MODE=1` and supplies a local HTTP `DEVLOG_SCREENSHOT_BASE_URL`. A test browser that still reaches `/login` is recorded as `AUTH_CAPTURE_NOT_CONFIGURED` rather than captured. Every run writes `manifest.json` and `README.md`; screens that fail, contain likely sensitive content, or are not safely configured are recorded without creating an image file.
