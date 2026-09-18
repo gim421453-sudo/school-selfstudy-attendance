@@ -5,7 +5,12 @@ import { DEFAULT_OPERATIONS_SETTINGS, getOperationsSettings, saveOperationsSetti
 import type { EmergencyMode, OperationsSettings } from "../types/domain";
 
 const labels: Record<EmergencyMode, string> = { NORMAL: "정상 운영", READ_ONLY: "조회 전용", ESSENTIAL_ONLY: "필수 자습 운영", MAINTENANCE: "시스템 점검", LOCKDOWN: "일반 사용자 접근 제한" };
-const toInput = (value: unknown) => value && typeof value === "object" && "toDate" in value ? (value as { toDate(): Date }).toDate().toISOString().slice(0, 16) : "";
+const toInput = (value: unknown) => {
+  if (!value || typeof value !== "object" || !("toDate" in value)) return "";
+  const date = (value as { toDate(): Date }).toDate();
+  const pad = (part: number) => String(part).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
 const toTimestamp = (value: string) => value ? Timestamp.fromDate(new Date(value)) : null;
 
 export function OperationsPage() {

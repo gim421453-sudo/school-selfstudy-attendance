@@ -11,6 +11,12 @@
     "devlog:screenshots": "node scripts/devlog-screenshots.mjs",
     "devlog:emulators": "firebase emulators:start --only auth,firestore",
     "devlog:seed": "node scripts/devlog-test-seed.mjs",
+    "devlog:naver:check": "node scripts/naver-blog-publisher.mjs check",
+    "devlog:naver:open": "node scripts/naver-blog-publisher.mjs open",
+    "devlog:naver:browser": "node scripts/naver-blog-publisher.mjs browser",
+    "devlog:naver:check-editor": "node scripts/naver-blog-publisher.mjs check-editor",
+    "devlog:naver:fill": "node scripts/naver-blog-publisher.mjs fill",
+    "devlog:naver:helper": "node scripts/naver-blog-helper.mjs",
     "test:devlog-screenshots": "node --test scripts/devlog-screenshot-lib.node-test.mjs",
     "test:rules": "node scripts/check-java.mjs && firebase emulators:exec --only firestore \"vitest run src/tests/firestore.rules.test.ts\"",
     "verify": "npm run build && npm test && npm run test:rules && npm audit"
