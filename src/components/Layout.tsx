@@ -61,7 +61,7 @@ export function Layout() {
         <button ref={closeButton} type="button" className="sidebar-close" aria-label={"\uC0AC\uC774\uB4DC\uBC14 \uB2EB\uAE30"} onClick={() => setSidebarOpen(false)}>{"\u00D7"}</button>
       </div>
       <nav>{menu.map((item) => <NavLink key={item.to} to={item.to} onClick={() => setSidebarOpen(false)}>{item.label}</NavLink>)}</nav>
-      {operations && <div className="profile-box"><span className="muted">시스템 운영 상태</span><strong className="badge">{operationModeLabels[operations.emergencyMode]}</strong></div>}
+      {operations && <div className="profile-box"><span className="muted">시스템 운영 상태</span>{owner ? <NavLink className="badge" to="/admin/operations" aria-label="시스템 운영 설정 열기">{operationModeLabels[operations.emergencyMode]}</NavLink> : <strong className="badge">{operationModeLabels[operations.emergencyMode]}</strong>}</div>}
       <div className="profile-box"><strong>{appUser?.displayName}</strong><span>{appUser?.email}</span><button className="ghost" onClick={() => void logout()}>{"\uB85C\uADF8\uC544\uC6C3"}</button></div>
     </aside>
     <main className="content">
