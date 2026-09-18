@@ -159,7 +159,7 @@ export function SelfStudyAttendancePage() {
   if (!currentScope) return <section className="empty-state"><h2>학년을 선택하세요.</h2><p>자습 출결은 특정 학년 범위에서만 입력할 수 있습니다.</p></section>;
 
   return <section className="self-study-attendance-page">
-    <header className="page-header"><div><div className="eyebrow">자습 출결</div><h2>{privileged ? "관리자 출결 보정" : "담당 자습 출결"}</h2><p className="muted">감독교사가 실제 자습그룹 학생의 출석 여부를 기록하는 화면입니다.</p></div></header>
+    <header className="page-header"><div><div className="eyebrow">자습 출결</div><h2>{privileged ? "관리자 출결 보정" : "담당 자습 출결"}</h2><p className="muted">감독교사가 실제 자습그룹 학생의 출석 여부를 기록하는 화면입니다.</p></div></header><p className="muted">선택한 날짜·자습교시·자습그룹의 학생만 출결을 기록합니다. 출결 기록이 없는 상태는 미입력이며 무단 결석과 다릅니다.</p>
     <section className="card attendance-controls" aria-label="자습 출결 선택">
       <label>날짜<input type="date" value={date} disabled={saving} onChange={(event) => changeDate(event.target.value)} /></label>
       <label>교시<select value={periodId} disabled={saving || availablePeriods.length === 0} onChange={(event) => changePeriod(event.target.value)}>{availablePeriods.map((period) => <option key={period.id} value={period.id}>{period.name} ({period.startTime}~{period.endTime})</option>)}</select></label>

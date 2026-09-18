@@ -74,7 +74,7 @@ export function LoginPage() {
           <label>테스트 비밀번호<input aria-label="테스트 비밀번호" type="password" value={testPassword} onChange={(event) => setTestPassword(event.target.value)} /></label>
           <button type="submit" className="secondary" disabled={busy}>테스트 환경 로그인</button>
         </form>}
-        <p className="muted">{copy.staffOnly}</p>
+        <p className="muted">{copy.staffOnly}</p><p className="muted">Google 인증만으로 사용 권한이 생기지 않으며, 승인 후 학년도·학년 배정이 있어야 업무 화면에 들어갈 수 있습니다.</p>
         {error && <div className="error-box">{error}</div>}
       </div>
     </div>
