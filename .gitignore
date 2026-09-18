@@ -8,3 +8,4 @@ firebase-debug.log
 firestore-debug.log
 local-backups/
 *.tsbuildinfo
+artifacts/
