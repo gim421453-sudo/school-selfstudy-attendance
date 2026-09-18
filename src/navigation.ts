@@ -4,6 +4,7 @@ import { hasGlobalOwnerRole, isGradeAdminForGrade, isHomeroomTeacherForClass } f
 export type NavigationItem = { to: string; label: string; ownerOnly?: boolean; gradeAdmin?: boolean; homeroom?: boolean; homeroomOrOwner?: boolean; selfStudyAttendance?: boolean; selfStudyHistory?: boolean };
 export const navigationItems: NavigationItem[] = [
   { to: "/", label: "\uB300\uC2DC\uBCF4\uB4DC" },
+  { to: "/settings/appearance", label: "화면 스타일 설정" },
   { to: "/self-study-attendance", label: "\uC790\uC2B5 \uCD9C\uACB0", selfStudyAttendance: true },
   { to: "/my-supervision", label: "\uAC10\uB3C5\uAD50\uC0AC \uC77C\uC815", selfStudyAttendance: true },
   { to: "/self-study-history", label: "\uC790\uC2B5 \uCD9C\uACB0 \uC774\uB825", selfStudyHistory: true },

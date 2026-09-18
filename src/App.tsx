@@ -28,6 +28,7 @@ const SelfStudyExceptionsPage = lazy(() => import("./pages/SelfStudyExceptionsPa
 const MySupervisionPage = lazy(() => import("./pages/MySupervisionPage").then((module) => ({ default: module.MySupervisionPage })));
 const OperationsPage = lazy(() => import("./pages/OperationsPage").then((module) => ({ default: module.OperationsPage })));
 const AcademicYearSetupPage = lazy(() => import("./pages/AcademicYearSetupPage").then((module) => ({ default: module.AcademicYearSetupPage })));
+const AppearanceSettingsPage = lazy(() => import("./pages/AppearanceSettingsPage").then((module) => ({ default: module.AppearanceSettingsPage })));
 
 export default function App() {
   return (
@@ -58,6 +59,7 @@ export default function App() {
             <Route path="/admin/staff" element={<OwnerRoute><StaffAssignmentAdminPage /></OwnerRoute>} />
             <Route path="/admin/operations" element={<OwnerRoute><OperationsPage /></OwnerRoute>} />
             <Route path="/admin/academic-year-setup" element={<OwnerRoute><AcademicYearSetupPage /></OwnerRoute>} />
+            <Route path="/settings/appearance" element={<AppearanceSettingsPage />} />
             <Route path="/audit" element={<AuditRoute><AuditPage /></AuditRoute>} />
           </Route>
         </Routes>
