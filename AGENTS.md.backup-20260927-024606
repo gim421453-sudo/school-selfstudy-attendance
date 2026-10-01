@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # Cross-device continuation policy
-=======
-﻿# Cross-device continuation policy
->>>>>>> dcdb850f778d193b58f5a0e8ddcf4314342da62c
 
 <!-- PROJECT_HANDOFF_POLICY_START -->
 
@@ -94,29 +90,3 @@ After updating the handoff, include a short confirmation:
 If the handoff could not be updated, explicitly state why.
 
 <!-- PROJECT_HANDOFF_POLICY_END -->
-<<<<<<< HEAD
-=======
-
-<!-- PROJECT_DOCUMENTATION_POLICY_START -->
-## Automatic project documentation
-Before finishing meaningful project-changing work, use the `project-docs-manager` skill and read `PROJECT_DOCS.config`.
-
-Managed documents:
-- `README.md`
-- `CHANGELOG.md`
-- `docs/deployment/DEPLOYMENT.md`
-- development logs under the configured root
-- `docs/handoff/CURRENT_HANDOFF.md`
-
-Rules:
-1. README: update only when project purpose, setup, usage, major features, architecture, configuration, supported platforms, or useful repository structure materially changes.
-2. CHANGELOG: update only for meaningful release-relevant changes. Use `Unreleased` when no verified release version is known.
-3. Deployment docs: update only when build/release, hosting, environment, migration, domain/routing, rollback/recovery, or production verification behavior changes.
-4. Development-log automation is controlled by `DEVLOG_AUTO_UPDATE` in `PROJECT_DOCS.config`.
-5. When `DEVLOG_AUTO_UPDATE=false`, do not create or update development logs unless the user explicitly requests one.
-6. Cross-device handoff remains mandatory after meaningful project-changing work.
-7. Preserve existing project-specific documentation; never replace it with generic content unnecessarily.
-8. Never write secret values into managed documents.
-<!-- PROJECT_DOCUMENTATION_POLICY_END -->
-
->>>>>>> dcdb850f778d193b58f5a0e8ddcf4314342da62c
