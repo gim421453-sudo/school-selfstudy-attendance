@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # Cross-device continuation policy
-=======
-﻿# Cross-device continuation policy
->>>>>>> dcdb850f778d193b58f5a0e8ddcf4314342da62c
 
 <!-- PROJECT_HANDOFF_POLICY_START -->
 
@@ -94,8 +90,6 @@ After updating the handoff, include a short confirmation:
 If the handoff could not be updated, explicitly state why.
 
 <!-- PROJECT_HANDOFF_POLICY_END -->
-<<<<<<< HEAD
-=======
 
 <!-- PROJECT_DOCUMENTATION_POLICY_START -->
 ## Automatic project documentation
@@ -119,4 +113,13 @@ Rules:
 8. Never write secret values into managed documents.
 <!-- PROJECT_DOCUMENTATION_POLICY_END -->
 
->>>>>>> dcdb850f778d193b58f5a0e8ddcf4314342da62c
+## Verification commands (package.json scripts)
+
+- `npm run build` — `tsc -b && vite build`
+- `npm test` — `vitest run`
+- `npm run test:rules` — Firestore Rules tests; runs on the Firebase Emulator (Java required), never against production
+- `npm run verify` — build, test, test:rules, then `npm audit` (audit needs network)
+
+## Ownership
+
+- `OWNER` file at repo root = `Claude`. Claude edits files; Codex reads only.
