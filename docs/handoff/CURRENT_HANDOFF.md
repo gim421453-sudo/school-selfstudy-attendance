@@ -1,129 +1,45 @@
 # Current Project Handoff
 
-<<<<<<< HEAD
-Last updated: 2026-10-02 (Asia/Seoul)
+Last updated: 2026-10-14 (Asia/Seoul)
 Status: READY_WITH_WARNINGS
 
 ## Project
 
 - Project: school-selfstudy-attendance
 - Repository: VERIFIED locally
-- Branch: master
-- HEAD: 622250c
+- Branch: docs/cleanup-conflict-markers
+- HEAD: 5d5d078 (baseline before this cleanup; cleanup changes are uncommitted)
 
 ## Session objective
 
-Initialize the cross-device handoff with the latest verified UI settings scaffold state.
+Documentation-only cleanup: resolve leftover merge-conflict markers, add the `OWNER` file, and bring `CLAUDE.md` / `AGENTS.md` up to date with the real stack and verification commands.
 
 ## Completed this session
 
-- Added authenticated-user route `/settings/appearance`.
-- Added UI-only screen-style settings page.
-- Added centralized V2/V3/V4/V5 theme catalog.
-- Added the appearance settings item to existing navigation.
-- Kept all controls disabled; no persistence or theme engine was added.
-- Visual audit artifacts exist under `artifacts/ui-audit/`.
-
-## Files changed
-
-### Latest UI settings scaffold
-
-- `src/domain/uiThemes.ts`
-- `src/pages/AppearanceSettingsPage.tsx`
-- `src/App.tsx`
-- `src/navigation.ts`
-
-### Handoff and workspace metadata
-
-- `docs/handoff/CURRENT_HANDOFF.md`
-- `AGENTS.md` and `.agents/` are currently untracked workspace files.
-
-## Decisions / architecture
-
-- Appearance settings are presentation-only scaffolding.
-- No localStorage, user preferences, Firestore writes, CSS theme switching, or `data-theme` attributes were introduced.
-- Existing authentication, authorization, Firebase, and page behavior remain unchanged.
-
-## Verification
-
-- TypeScript check: PASS (`npx tsc --noEmit`, verified after the settings scaffold change).
-- Build: NOT RUN for the latest scaffold.
-- Unit tests: NOT RUN for the latest scaffold.
-- Integration tests: NOT RUN.
-- Rules/security tests: NOT RUN.
-- Deploy: NOT RUN.
-- Firebase access/data migration: NOT RUN.
-
-## Known issues / blockers
-
-- Appearance controls are intentionally disabled and do not persist or apply settings.
-- Protected route visual audit screenshots were recorded as `CAPTURE_BLOCKED` because authentication was not bypassed.
-- Untracked `.agents/`, `AGENTS.md`, and `docs/handoff/` must not be removed or reset without explicit instruction.
-
-## Do not repeat
-
-- Do not add a theme engine, persistence, Firestore preference model, or CSS redesign as part of the scaffold.
-- Do not install dependencies or deploy Firebase resources without a new explicit request.
-- Do not treat disabled appearance controls as implemented persistence.
-
-## Exact next action
-
-If continuing appearance work, verify the route and catalog against the repository, then wait for explicit approval before implementing persistence or actual theme application.
-
-## Additional next actions
-
-- Review `artifacts/ui-audit/ui-inventory.md` when beginning the broader UI redesign.
-- Run the full verification suite only when explicitly requested.
-
-## Environment / configuration
-
-- Workspace: `C:\dev\school-selfstudy-attendance`
-- Timezone: Asia/Seoul
-- Firebase configuration exists in the repository environment; secrets are intentionally excluded.
-- Local Vite/Playwright tooling was already available; no dependency installation was performed.
-
-## Git / workspace state
-
-- Working tree: tracked diff not shown by last `git status --short`; untracked `.agents/`, `AGENTS.md`, and `docs/handoff/` are present.
-- Remote: NOT VERIFIED.
-- Last verified commit: `622250c`.
-- No commit, reset, checkout, or deploy was performed for this handoff update.
-
-## Cross-device readiness
-
-READY_WITH_WARNINGS
-
-Warnings:
-- Verify untracked workspace metadata before cleanup.
-- Latest scaffold has TypeScript verification only; build and tests were intentionally not run.
-=======
-Last updated: NOT SET
-Status: NOT_INITIALIZED
-
-## Project
-
-- Project: NOT SET
-- Repository: NOT VERIFIED
-- Branch: NOT VERIFIED
-- HEAD: NOT VERIFIED
-
-## Session objective
-
-None
-
-## Completed this session
-
-None
+- Resolved conflict markers in `AGENTS.md`, `CHATGPT_PROJECT_INSTRUCTIONS.md`, `docs/handoff/CURRENT_HANDOFF.md`, `.agents/skills/project-handoff/SKILL.md`, `.agents/skills/project-handoff/references/HANDOFF_TEMPLATE.md`.
+  - `AGENTS.md`: kept both PROJECT_HANDOFF_POLICY and PROJECT_DOCUMENTATION_POLICY blocks; first line has no BOM.
+  - `CURRENT_HANDOFF.md`: kept the 2026-10-02 (READY_WITH_WARNINGS) content; dropped the NOT_INITIALIZED template.
+  - `CHATGPT_PROJECT_INSTRUCTIONS.md`: HEAD side plus the `PROJECT_DOCS.config` / `project-docs-manager` / `DEVLOG_AUTO_UPDATE` rules from dcdb850.
+  - `SKILL.md`, `HANDOFF_TEMPLATE.md`: HEAD side only (dcdb850 side had no unique rules).
+- Added `OWNER` (`Claude`).
+- `CLAUDE.md`: stack set to Vite + React 19 + TypeScript + Firebase, removed the NOT_INITIALIZED note, filled verification commands, added the OWNER rule.
+- `AGENTS.md`: added the same verification commands and the "OWNER=Claude, Codex reads only" rule.
+- Earlier state still true: `AGENTS.md` and `.agents/` are already tracked (no longer untracked workspace files). `/settings/appearance` is a disabled UI-only scaffold (`src/domain/uiThemes.ts`, `src/pages/AppearanceSettingsPage.tsx`, `src/App.tsx`, `src/navigation.ts`); no persistence or theme engine.
 
 ## Files changed
 
 ### Created
 
-None
+- `OWNER`
+- `CLAUDE.md` (was untracked; updated)
 
 ### Modified
 
-None
+- `AGENTS.md`
+- `CHATGPT_PROJECT_INSTRUCTIONS.md`
+- `docs/handoff/CURRENT_HANDOFF.md`
+- `.agents/skills/project-handoff/SKILL.md`
+- `.agents/skills/project-handoff/references/HANDOFF_TEMPLATE.md`
 
 ### Deleted
 
@@ -131,48 +47,56 @@ None
 
 ## Decisions / architecture
 
-None
+- Markdown/docs only. No change to `src/`, `firestore.rules`, `package.json`, or any config.
+- Conflict resolution default = HEAD side (e5a3fa8); dcdb850-only rules merged only where they were genuinely new.
+- `OWNER=Claude`: Codex reads only.
 
 ## Verification
 
-- Build: NOT RUN
+- Conflict-marker grep (incl. CRLF-aware `\r?` variant): see session output; expected no matches after cleanup.
+- Build: NOT RUN (docs-only task)
 - Unit tests: NOT RUN
 - Integration tests: NOT RUN
-- Rules/security tests: NOT RUN
-- Manual verification: NOT RUN
+- Rules/security tests: NOT RUN (`npm run test:rules`, Emulator)
+- Deploy: NOT RUN
 
 ## Known issues / blockers
 
-None
+- `AGENTS.md.backup-20260927-024606` is still tracked; the user will remove it with `git rm`. Claude must not delete it.
+- Note: a plain `^=======( |$)` grep misses these CRLF files; use `^(<<<<<<<|=======|>>>>>>>)( |\r?$)`.
+- Appearance controls are intentionally disabled.
 
 ## Do not repeat
 
-None
+- Do not add a theme engine, persistence, or Firestore preference model without a new explicit request.
+- Do not install dependencies or deploy Firebase resources without a new explicit request.
+- Do not delete the AGENTS.md backup file.
 
 ## Exact next action
 
-Initialize this handoff from the current verified project state before the next meaningful change.
+Verify the 14 Firestore Rules scenarios listed in `CODEX_HANDOFF.md` (section "검증해야 할 핵심 시나리오") on the Firebase Emulator with `npm run test:rules`; do not deploy to production before the Emulator passes.
 
 ## Additional next actions
 
-None
+- User: `git rm AGENTS.md.backup-20260927-024606`, then stage and commit the docs cleanup.
+- Review `artifacts/ui-audit/ui-inventory.md` when starting the broader UI redesign.
 
 ## Environment / configuration
 
-- Required local configuration: NOT VERIFIED
-- Required external services: NOT VERIFIED
-- Secret values intentionally excluded.
+- Workspace: `C:\dev\school-selfstudy-attendance`
+- Timezone: Asia/Seoul
+- `npm run test:rules` needs Java and the Firebase Emulator; Firebase config lives in the local environment, secrets intentionally excluded.
 
 ## Git / workspace state
 
-- Working tree: NOT VERIFIED
-- Remote: NOT VERIFIED
-- Last verified commit: NOT VERIFIED
+- Branch `docs/cleanup-conflict-markers`; changes uncommitted. No add/commit/push/pull/reset/stash performed.
+- Remote: NOT VERIFIED.
+- Last verified commit: `5d5d078`.
 
 ## Cross-device readiness
 
-BLOCKED
+READY_WITH_WARNINGS
 
-Reason:
-The handoff has not yet been initialized from verified project state.
->>>>>>> dcdb850f778d193b58f5a0e8ddcf4314342da62c
+Warnings:
+- Build, unit tests, and Rules tests were not run in this session (docs-only).
+- Cleanup is uncommitted until the user stages and commits it.
