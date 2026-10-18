@@ -3,6 +3,7 @@ import {
   canAssignHomeroomTeacher,
   canReadClass,
   canViewClassStatistics,
+  statisticsClassScope,
   chooseInitialScope,
   chooseInitialSchoolScope,
   currentAcademicYearInitializationError,
@@ -142,5 +143,19 @@ describe("annual grade scope", () => {
     expect(exceptionAppliesToScope({ academicYearId: "2026", scopeType: "grade", gradeId: "2026-2" }, { academicYearId: "2026", gradeId: "2026-2" })).toBe(true);
     expect(exceptionAppliesToScope({ academicYearId: "2026", scopeType: "grade", gradeId: "2026-2" }, { academicYearId: "2026", gradeId: "2026-1" })).toBe(false);
     expect(exceptionAppliesToScope({ academicYearId: "2026", scopeType: "school", active: false }, { academicYearId: "2026", gradeId: "2026-1" })).toBe(false);
+  });
+});
+
+describe("self-study statistics class scope", () => {
+  it("lets owners and grade admins pick any class or the whole grade", () => {
+    expect(statisticsClassScope({ canViewGrade: true, selectedClassId: "", ownClassId: undefined })).toBe("");
+    expect(statisticsClassScope({ canViewGrade: true, selectedClassId: "c2", ownClassId: "c1" })).toBe("c2");
+  });
+  it("pins a homeroom teacher to the own class regardless of the selection", () => {
+    expect(statisticsClassScope({ canViewGrade: false, selectedClassId: "c2", ownClassId: "c1" })).toBe("c1");
+  });
+  it("denies a teacher without a homeroom class instead of falling back to the whole grade", () => {
+    expect(statisticsClassScope({ canViewGrade: false, selectedClassId: "", ownClassId: undefined })).toBeNull();
+    expect(statisticsClassScope({ canViewGrade: false, selectedClassId: "c2", ownClassId: undefined })).toBeNull();
   });
 });

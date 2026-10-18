@@ -119,6 +119,7 @@ Rules:
 - `npm test` — `vitest run`
 - `npm run test:rules` — Firestore Rules tests; runs on the Firebase Emulator (Java required), never against production
 - `npm run verify` — build, test, test:rules, then `npm audit` (audit needs network)
+- Unit test baseline (2026-10-18): `npm test` 167 passed / 17 skipped (the rules suite skips without the emulator).
 - Rules test baseline (2026-10-18): 17 tests in `src/tests/firestore.rules.test.ts`, all passing. The scenario-to-test map lives in `CODEX_HANDOFF.md` ("검증해야 할 핵심 시나리오").
 - Windows excluded TCP ranges cover the emulator hub (4400) and logging (4500) defaults; the Firebase CLI moves them automatically (seen: 4547/4546). Firestore 8080 and Auth 9099 are outside the excluded ranges. If a port clash stops the emulator, report it — do not change Windows port reservations.
 
