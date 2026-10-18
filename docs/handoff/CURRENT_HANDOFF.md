@@ -1,24 +1,27 @@
 # Current Project Handoff
 
-Last updated: 2026-10-18 (Asia/Seoul)
+Last updated: 2026-10-19 (Asia/Seoul)
 Status: READY_WITH_WARNINGS
 
 ## Project
 
 - Project: school-selfstudy-attendance
-- Repository: VERIFIED locally; `origin/master` = `a7c3c83` (PR #2 rules scenarios merged)
-- Branch: `test/ui-scenarios-11-12-14` (created from `a7c3c83`)
+- Repository: VERIFIED locally; `origin/master` = `e042d7d` (PR #3 UI scenarios merged)
+- Branch: `feat/homeroom-stats-toggle` (created from `e042d7d`)
 - HEAD: this session's commit on that branch; committed and pushed by Claude (user delegated commit/push)
 
 ## Session objective
 
-Cover the UI-side scenarios 11, 12 and 14 from `CODEX_HANDOFF.md` with unit tests and make the statistics class scope fail-closed.
+Connect the homeroom statistics policy toggle (`settings/access`) to the self-study statistics screen, as the user decided.
 
 ## Completed this session
 
-- Scenario 11: moved the supervision Excel preview logic out of `SupervisionPage.upload()` into `buildSupervisionImportPreview` and added `canCommitSupervisionImport` (`src/domain/supervisionUi.ts`). New: rows dated outside the selected month are errors ("선택한 월 밖의 날짜"). The page's save button and `commitImport()` use `canCommitSupervisionImport`. Replaced the vacuous test "requires a clean preview before commit" with 5 real tests (red first: function missing).
-- Scenario 12: added a test chaining `buildBulkPresentDraft` → `resolveSelfStudyAttendanceDisplayStatus` → `summarizeSelfStudyAttendance` (3 students, 1 absent → present 2, unexcused 1). Characterization test; no app code change; passed on first run.
-- Scenario 14: added `statisticsClassScope` (`src/domain/scope.ts`): owner/grade admin → selected class or whole grade, homeroom → own class, otherwise `null`. `SelfStudyStatisticsPage` shows "통계를 조회할 권한이 없습니다." when `null` (after classes load) instead of an empty table. 3 tests (red first). Correction to the earlier investigation report: the old page already skipped the query when the teacher had no class, so this was not a data exposure, only an unexplained empty page.
+- `statisticsClassScope` (`src/domain/scope.ts`) now takes the access settings: owner/grade admin are unaffected; a homeroom teacher gets the own class only when `statsVisibility = "grade_admin_and_homeroom"`; `grade_admin_only`, a missing document (service default) or a read failure deny (fail-closed). `homeroomStatsScope = "grade"` still pins the own class because the rules only let a homeroom teacher read that class.
+- `SelfStudyStatisticsPage` loads the settings with `getAccessSettings()` and shows the no-access message only after classes and settings have loaded.
+- `AdminPage` toggle label shows "학년부만" / "학년부 + 담임(본인 반)" with a one-line explanation instead of the raw value.
+- Tests: scope tests rewritten with the settings input (5 tests; the "policy off/unreadable denies homeroom" test failed first).
+- `firestore.rules` unchanged. Reason: the toggle is a statistics-screen policy; homeroom teachers must keep reading their own class records for the history page, and the rules already never allow whole-grade reads for them.
+- Correction carried over: the earlier report that a teacher without a homeroom class queried the whole grade was wrong (the page already skipped the query); fixed in the PR #3 handoff.
 
 ## Files changed
 
@@ -28,14 +31,11 @@ None
 
 ### Modified
 
-- `src/domain/supervisionUi.ts`
-- `src/pages/SupervisionPage.tsx`
 - `src/domain/scope.ts`
 - `src/pages/SelfStudyStatisticsPage.tsx`
-- `src/tests/supervision-ui.test.ts`
-- `src/tests/self-study-reporting.test.ts`
+- `src/pages/AdminPage.tsx`
 - `src/tests/scope.test.ts`
-- `CODEX_HANDOFF.md` (rows 11, 12 and next steps only)
+- `CODEX_HANDOFF.md` (rows 13, 14 and next steps)
 - `AGENTS.md`
 - `docs/handoff/CURRENT_HANDOFF.md`
 
@@ -45,14 +45,15 @@ None
 
 ## Decisions / architecture
 
-- Out-of-range date = outside the month selected on `/supervision` (chosen in the plan; change if the academic-year range is wanted).
-- Dead code (`DutySchedulePage`, `StatsPage`, `parseDutyWorkbook`, `parseDutyWorkbookByPeriod`) left as is; separate cleanup task.
-- Homeroom statistics policy toggle (`settings/access`, AdminPage): waiting for the user's decision (remove the toggle vs wire it into `SelfStudyStatisticsPage`). The toggle, AdminPage and CODEX_HANDOFF rows 13·14 were not touched.
+- Default and failure = homeroom statistics closed.
+- No UI sets `homeroomStatsScope`; the value `grade` is treated as own class. Supporting whole-grade homeroom statistics would need a rules change and Emulator tests first.
+- The statistics menu item is still visible to every assigned teacher; a teacher without access sees the no-access message. Hiding the menu is a possible follow-up.
+- Dead code (`DutySchedulePage`, `StatsPage`, `parseDutyWorkbook*`) still left for a separate cleanup.
 
 ## Verification
 
 - Build (`npm run build`): RUN, passed (chunk-size warning only)
-- Unit tests (`npm test`): RUN, 29 files passed / 1 skipped; 167 tests passed / 17 skipped (was 159)
+- Unit tests (`npm test`): RUN, 169 passed / 17 skipped
 - Rules tests (`npm run test:rules`, Firestore Emulator): RUN, 17/17 passed
 - Manual UI check in a browser: NOT RUN
 - `npm audit`: NOT RUN
@@ -60,8 +61,7 @@ None
 
 ## Known issues / blockers
 
-- Pending user decision on the homeroom statistics policy toggle (scenarios 13·14).
-- `supervisionUi.ts` new strings are literal Korean, while most of the file uses unicode escape sequences; both are UTF-8 and work.
+- None blocking. Manual UI check pending.
 
 ## Do not repeat
 
@@ -70,25 +70,25 @@ None
 
 ## Exact next action
 
-Open a PR `test/ui-scenarios-11-12-14` → `master` after review, then apply the user's decision on the statistics policy toggle and update CODEX_HANDOFF rows 13·14.
+Open a PR `feat/homeroom-stats-toggle` → `master` after review.
 
 ## Additional next actions
 
-- Manual check of `/supervision` Excel upload and `/self-study-statistics` as a teacher without a homeroom class (Emulator or demo project only).
+- Manual check on Emulator/demo data: toggle in `/admin`, then open `/self-study-statistics` as a homeroom teacher with the policy on and off.
+- Optional: hide the statistics menu for users without access.
 - Separate task: remove dead duty/statistics code.
-- Review `artifacts/ui-audit/ui-inventory.md` when starting the broader UI redesign.
 
 ## Environment / configuration
 
 - Workspace: the repository root (folder name differs per computer)
 - Timezone: Asia/Seoul
 - `npm run test:rules` needs Java (verified: OpenJDK 21) and the Firebase Emulator; no production access.
-- Windows excluded TCP ranges cover emulator hub 4400 and logging 4500; the CLI moves them automatically. Firestore 8080 and Auth 9099 are free.
+- Windows excluded TCP ranges cover emulator hub 4400 and logging 4500; the CLI moves them automatically.
 - Firebase config lives in the local environment; secrets intentionally excluded.
 
 ## Git / workspace state
 
-- Branch `test/ui-scenarios-11-12-14` from `master` (`a7c3c83`), committed and pushed to origin by Claude. No PR, no merge to master.
+- Branch `feat/homeroom-stats-toggle` from `master` (`e042d7d`), committed and pushed to origin by Claude. No PR, no merge to master.
 
 ## Cross-device readiness
 
@@ -96,5 +96,4 @@ READY_WITH_WARNINGS
 
 Warnings:
 - Branch pushed but not merged.
-- Pending decision on the statistics policy toggle.
 - Manual UI check and `npm audit` not run.

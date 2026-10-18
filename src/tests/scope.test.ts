@@ -147,15 +147,24 @@ describe("annual grade scope", () => {
 });
 
 describe("self-study statistics class scope", () => {
-  it("lets owners and grade admins pick any class or the whole grade", () => {
-    expect(statisticsClassScope({ canViewGrade: true, selectedClassId: "", ownClassId: undefined })).toBe("");
-    expect(statisticsClassScope({ canViewGrade: true, selectedClassId: "c2", ownClassId: "c1" })).toBe("c2");
+  const on = { statsVisibility: "grade_admin_and_homeroom", homeroomStatsScope: "own_class" } as const;
+  const off = { statsVisibility: "grade_admin_only", homeroomStatsScope: "own_class" } as const;
+  it("lets owners and grade admins pick any class or the whole grade regardless of the policy", () => {
+    expect(statisticsClassScope({ canViewGrade: true, selectedClassId: "", ownClassId: undefined, settings: off })).toBe("");
+    expect(statisticsClassScope({ canViewGrade: true, selectedClassId: "c2", ownClassId: "c1", settings: null })).toBe("c2");
   });
-  it("pins a homeroom teacher to the own class regardless of the selection", () => {
-    expect(statisticsClassScope({ canViewGrade: false, selectedClassId: "c2", ownClassId: "c1" })).toBe("c1");
+  it("pins a homeroom teacher to the own class when the policy allows homeroom statistics", () => {
+    expect(statisticsClassScope({ canViewGrade: false, selectedClassId: "c2", ownClassId: "c1", settings: on })).toBe("c1");
+  });
+  it("keeps a homeroom teacher on the own class even when the stored scope says grade", () => {
+    expect(statisticsClassScope({ canViewGrade: false, selectedClassId: "", ownClassId: "c1", settings: { ...on, homeroomStatsScope: "grade" } })).toBe("c1");
+  });
+  it("denies a homeroom teacher when the policy is grade-admin only or could not be loaded", () => {
+    expect(statisticsClassScope({ canViewGrade: false, selectedClassId: "", ownClassId: "c1", settings: off })).toBeNull();
+    expect(statisticsClassScope({ canViewGrade: false, selectedClassId: "", ownClassId: "c1", settings: null })).toBeNull();
   });
   it("denies a teacher without a homeroom class instead of falling back to the whole grade", () => {
-    expect(statisticsClassScope({ canViewGrade: false, selectedClassId: "", ownClassId: undefined })).toBeNull();
-    expect(statisticsClassScope({ canViewGrade: false, selectedClassId: "c2", ownClassId: undefined })).toBeNull();
+    expect(statisticsClassScope({ canViewGrade: false, selectedClassId: "", ownClassId: undefined, settings: on })).toBeNull();
+    expect(statisticsClassScope({ canViewGrade: false, selectedClassId: "c2", ownClassId: undefined, settings: on })).toBeNull();
   });
 });
