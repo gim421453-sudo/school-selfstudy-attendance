@@ -54,13 +54,13 @@ npm test
 | 8 | grade_admin 이 `users.globalRoles`/`roles`/`active` 또는 `staffAssignments`(역할 승격 포함) 변경 | DENY | lets only the scoped grade admin write students and classes, … / reserves grade-admin role changes for the system owner (레거시 `roles`) |
 | 9 | system_owner 가 `users` roles/active, `staffAssignments` 변경 | ALLOW | allows system owner user administration while protecting audit immutability / reserves grade-admin role changes for the system owner / validates StaffAssignment projections and D3 … / lets only the scoped grade admin write … (owner 승격) |
 | 10 | auditLogs update/delete (owner 포함) | DENY | allows system owner user administration while protecting audit immutability / enforces scoped attendance, history, and audit rules |
-| 11 | Excel 동명이인·중복 날짜·기간 밖 날짜가 적용 버튼을 막는지 | Rules 테스트 불가 (UI·파서) | 파서 단위 테스트: `src/tests/excel.test.ts` (reports an ambiguous name, reports duplicate dates, does not write while parsing mixed-validity rows). 적용 버튼 차단(UI)과 기간 밖 날짜는 NOT VERIFIED |
-| 12 | 반 전체 출석 후 1명만 결석으로 바꾸면 결석 1건만 집계 | Rules 테스트 불가 (집계 로직) | 관련 단위 테스트: `src/tests/statistics.test.ts`, `src/tests/self-study-operation.test.ts` (bulk present selects only unentered students …). 이 시나리오 자체를 그대로 재현한 테스트는 없음 (NOT VERIFIED) |
+| 11 | 감독 Excel 업로드(`/supervision`)에서 동명이인·파일 내 중복 행·선택한 월 밖 날짜가 있으면 '확인 후 저장'을 막는지 | 저장 차단 (단위 테스트) | `src/tests/supervision-ui.test.ts` "supervision import preview" (blocks commit when the file repeats a row / a teacher name is ambiguous / a date is outside the selected month). 미리보기 생성은 `buildSupervisionImportPreview`, 버튼과 `commitImport` 는 `canCommitSupervisionImport` 를 쓴다(`src/domain/supervisionUi.ts`). 실제 화면 클릭은 NOT VERIFIED |
+| 12 | 반 전체 일괄 출석 후 1명만 결석으로 바꾸면 결석 1건만 집계 | 결석 1건 (단위 테스트) | `src/tests/self-study-reporting.test.ts` "counts exactly one absence after bulk present and one student switched to absent" (`buildBulkPresentDraft` → `resolveSelfStudyAttendanceDisplayStatus` → `summarizeSelfStudyAttendance`) |
 | 13 | 담임 통계 정책 OFF → 담임은 통계 못 봄 | DENY | honors the homeroom statistics policy. 규칙상 `statistics` 는 정책과 무관하게 owner/레거시 grade_admin 만 읽는다 |
 | 14 | 담임 통계 정책 ON → 본인 반 데이터만 | 규칙: 담임은 본인 반 attendance 만 읽음, 다른 반·학년 전체 쿼리 DENY. `settings/access` 정책은 Rules 가 참조하지 않으므로 UI 집계 범위는 Rules 테스트 불가 | enforces scoped attendance, history, and audit rules (homeA) / honors the homeroom statistics policy (정책 ON 이어도 `statistics` DENY) |
 
 ## 다음 단계
 
 - Emulator Rules 테스트는 자동화됐다(`npm run test:rules`). 새 컬렉션이나 권한을 추가하면 위 표에 행과 테스트를 같이 추가한다.
-- 11·12·14(UI 범위)는 화면 테스트나 단위 테스트로 따로 확인해야 한다.
+- 11·12 는 2026-10-18 에 단위 테스트로 덮었다. 14 의 UI 범위와 13·14 의 담임 통계 정책 토글은 사용자 결정(토글 제거 또는 통계 화면 연결)을 기다린다.
 - 실제 운영 배포는 Emulator PASS 와 사용자 승인 전까지 진행하지 않는다.

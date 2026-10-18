@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { makeSelfStudyExceptionId } from "../domain/ids";
 import { isScopedSelfStudyDate } from "../domain/schedule";
+import { buildBulkPresentDraft, resolveSelfStudyAttendanceDisplayStatus } from "../domain/selfStudyOperation";
 import { summarizeSelfStudyAttendance, summarizeSelfStudyAttendanceBy } from "../services/selfStudyReporting";
 import type { SelfStudyAttendanceRecord } from "../types/domain";
 
@@ -21,5 +22,12 @@ describe("self-study reporting", () => {
     expect(makeSelfStudyExceptionId("2026", "grade", "g2", "2026-09-18")).toBe("2026_g2_2026-09-18");
     expect(isScopedSelfStudyDate("2026-09-18", [{ active: false }])).toBe(true);
     expect(isScopedSelfStudyDate("2026-09-18", [{ active: true }])).toBe(false);
+  });
+  it("counts exactly one absence after bulk present and one student switched to absent", () => {
+    const rows = ["s1", "s2", "s3"].map((studentId) => ({ studentId, studentName: studentId, classId: "c1", classDisplayName: "1-1", selfStudyGroupId: "group-a", selfStudyGroupDisplayName: "A", existingAttendanceStatus: null, hasPermission: false }));
+    const drafts: Record<string, boolean | undefined> = { ...buildBulkPresentDraft(rows, {}), s2: true };
+    const marked: SelfStudyAttendanceRecord[] = rows.map((row) => ({ id: row.studentId, ...base, studentId: row.studentId, status: resolveSelfStudyAttendanceDisplayStatus(row, drafts[row.studentId])! }));
+    expect(summarizeSelfStudyAttendance(marked)).toEqual({ total: 3, present: 2, excused: 0, unexcused: 1 });
+    expect(summarizeSelfStudyAttendanceBy(marked, (record) => record.classId).get("c1")).toEqual({ total: 3, present: 2, excused: 0, unexcused: 1 });
   });
 });

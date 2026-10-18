@@ -64,6 +64,11 @@ export function canViewClassStatistics(user: AppUser | null, classRoom: ClassRoo
     || isHomeroomTeacherForClass(classRoom, assignments, user.uid);
 }
 
+/** Class filter for self-study statistics: "" = whole grade, null = no access (fail-closed). */
+export function statisticsClassScope(input: { canViewGrade: boolean; selectedClassId: string; ownClassId?: string }): string | null {
+  return input.canViewGrade ? input.selectedClassId : input.ownClassId ?? null;
+}
+
 export function isScopeSelectable(user: AppUser | null, assignments: StaffAssignment[], scope: SchoolScope): boolean {
   if (!user?.active) return false;
   if (scope.gradeId === null) return isSystemOwner(user);
