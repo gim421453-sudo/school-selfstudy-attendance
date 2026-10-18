@@ -140,6 +140,42 @@ suite("Firestore security rules", () => {
     await assertSucceeds(getDocs(query(collection(teacherA, "classes"), where("academicYearId", "==", "2026"), where("gradeId", "==", "2026-1"))));
   });
 
+  it("lets only the scoped grade admin write students and classes, and only the owner write users and staff assignments", async () => {
+    const scope = { academicYearId: "2026", gradeId: "sc-grade" };
+    await env.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await Promise.all([
+        setDoc(doc(db, "users", "sc-admin"), user("sc-admin", ["teacher"], { globalRoles: ["teacher"] })),
+        setDoc(doc(db, "users", "sc-teacher"), user("sc-teacher", ["teacher"], { globalRoles: ["teacher"] })),
+        setDoc(doc(db, "users", "sc-other-admin"), user("sc-other-admin", ["teacher"], { globalRoles: ["teacher"] })),
+        setDoc(doc(db, "grades", "sc-grade"), { ...scope, gradeNumber: 1, displayName: "1", active: true }),
+        setDoc(doc(db, "staffAssignments", "2026_sc-grade_sc-admin"), { ...scope, uid: "sc-admin", role: "grade_admin", active: true }),
+        setDoc(doc(db, "staffAssignments", "2026_sc-grade_sc-teacher"), { ...scope, uid: "sc-teacher", role: "teacher", active: true }),
+        setDoc(doc(db, "staffAssignments", "2026_sc-other_sc-other-admin"), { academicYearId: "2026", gradeId: "sc-other", uid: "sc-other-admin", role: "grade_admin", active: true }),
+        setDoc(doc(db, "classes", "sc-class"), { ...scope, classNumber: 1, displayName: "1-1", active: true, homeroomTeacherUid: null }),
+        setDoc(doc(db, "students", "sc-student"), { ...scope, classId: "sc-class", studentNo: 1, name: "A", active: true }),
+      ]);
+    });
+    const adminDb = env.authenticatedContext("sc-admin").firestore();
+    const teacherDb = env.authenticatedContext("sc-teacher").firestore();
+    const otherAdminDb = env.authenticatedContext("sc-other-admin").firestore();
+    const student = { ...scope, classId: "sc-class", studentNo: 2, name: "B", active: true };
+    const klass = { ...scope, classNumber: 2, displayName: "1-2", active: true };
+    await assertSucceeds(setDoc(doc(adminDb, "students", "sc-new"), student));
+    await assertSucceeds(updateDoc(doc(adminDb, "students", "sc-student"), { name: "A2" }));
+    await assertSucceeds(setDoc(doc(adminDb, "classes", "sc-class-2"), klass));
+    await assertSucceeds(updateDoc(doc(adminDb, "classes", "sc-class"), { displayName: "1-1A" }));
+    await assertFails(setDoc(doc(teacherDb, "students", "sc-teacher-new"), student));
+    await assertFails(updateDoc(doc(teacherDb, "students", "sc-student"), { name: "X" }));
+    await assertFails(setDoc(doc(teacherDb, "classes", "sc-teacher-class"), klass));
+    await assertFails(setDoc(doc(otherAdminDb, "students", "sc-other-new"), student));
+    await assertFails(updateDoc(doc(adminDb, "users", "sc-teacher"), { displayName: "Renamed" }));
+    await assertFails(updateDoc(doc(adminDb, "users", "sc-teacher"), { globalRoles: ["teacher", "system_owner"] }));
+    await assertFails(setDoc(doc(adminDb, "staffAssignments", "2026_sc-grade_sc-new"), { ...scope, uid: "sc-new", role: "teacher", active: true }));
+    await assertFails(updateDoc(doc(adminDb, "staffAssignments", "2026_sc-grade_sc-teacher"), { role: "grade_admin" }));
+    await assertSucceeds(updateDoc(doc(env.authenticatedContext("owner").firestore(), "staffAssignments", "2026_sc-grade_sc-teacher"), { role: "grade_admin" }));
+  });
+
   it("allows a staff member to bootstrap only the active year and assigned grade", async () => {
     await env.withSecurityRulesDisabled(async (context) => {
       const db = context.firestore();

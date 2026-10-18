@@ -38,21 +38,29 @@ npm test
 
 ## 검증해야 할 핵심 시나리오
 
-1. 일반 교사 A가 비담당 날짜에 attendance write → DENY
-2. 일반 교사 A가 본인 담당 날짜에 attendance write → ALLOW
-3. 일반 교사가 dutyAssignments 변경 → DENY
-4. grade_admin이 dutyAssignments Excel 일괄 적용 → ALLOW
-5. grade_admin이 학생/교시/반/담임 변경 → ALLOW
-6. 일반 교사가 학생/교시/반 변경 → DENY
-7. grade_admin이 users의 homeroomClassId/displayName만 변경 → ALLOW
-8. grade_admin이 roles/active/system_owner를 변경 → DENY
-9. system_owner는 users roles/active 변경 → ALLOW
-10. auditLogs update/delete → DENY
-11. Excel 동명이인/중복날짜/기간밖 날짜가 실제 적용 버튼을 막는지 확인
-12. 한 반 전체 출석 후 예외 학생 1명을 결석으로 바꿔 통계가 1건만 결석으로 집계되는지 확인
-13. 담임 통계 정책 OFF → 담임 통계 차단
-14. 담임 통계 정책 ON → 본인 반 데이터만 UI 집계
+2026-10-18 에 현재 `firestore.rules` 모델(학년도·학년 범위 `staffAssignments`, Duty V2 `dutyAssignments/{gradeId}_{date}/periods/{periodId}`, `users` 쓰기는 system_owner 만, 담임은 `classes.homeroomTeacherUid` + `homeroomAssignments`)에 맞춰 다시 썼다. 원래 v0.2 목록은 전역 역할(`users.roles`) 기준이었다.
+
+"테스트" 열은 `src/tests/firestore.rules.test.ts` 의 `it(...)` 이름이다. `npm run test:rules` 기준 17/17 통과(2026-10-18, Emulator).
+
+| # | 시나리오 (현재 모델) | 기대 | 근거 테스트 |
+|---|---|---|---|
+| 1 | 같은 학년 교사가 담당이 아닌 날짜·교시, 또는 편집 시간창 밖에 attendance write | DENY | enforces scoped attendance, history, and audit rules (teacherWrong, 2026-09-17 창 밖) / validates StaffAssignment projections and D3 self-study attendance boundaries (d3-other) |
+| 2 | Duty V2 담당 교사가 편집 시간창 안에서 본인 담당 attendance write | ALLOW | enforces scoped attendance, history, and audit rules (teacherA) / D3 테스트 (d3-supervisor) |
+| 3 | 일반 교사, 다른 학년 grade_admin 이 dutyAssignments 부모·교시 문서 변경 | DENY | enforces Duty V2 parent, child, batch, query, and exception scope rules |
+| 4 | 해당 학년 grade_admin 이 담당표 일괄 적용(부모+교시+감사로그 batch) | ALLOW (잘못된 교시가 섞이면 batch 전체 DENY) | enforces Duty V2 parent, child, batch, query, and exception scope rules |
+| 5 | 해당 학년 grade_admin 이 학생·반·교시·담임 생성/수정 | ALLOW | lets only the scoped grade admin write students and classes, and only the owner write users and staff assignments / enforces scoped class, student, period, and assignment access (교시) / enforces self-study operation scope, supervision, and homeroom permissions (담임 배정 batch) |
+| 6 | 일반 교사, 다른 학년 grade_admin 이 학생·반·교시 변경 | DENY | lets only the scoped grade admin write students and classes, … / enforces scoped class, student, period, and assignment access (교시) / enforces self-study operation scope, … (반 수정) |
+| 7 | grade_admin 이 `users` 문서(displayName 등) 수정 | DENY (v0.2 의 ALLOW 에서 바뀜: `users` 쓰기는 owner 만, 담임 연결은 `classes`/`homeroomAssignments` 로 함) | lets only the scoped grade admin write students and classes, … |
+| 8 | grade_admin 이 `users.globalRoles`/`roles`/`active` 또는 `staffAssignments`(역할 승격 포함) 변경 | DENY | lets only the scoped grade admin write students and classes, … / reserves grade-admin role changes for the system owner (레거시 `roles`) |
+| 9 | system_owner 가 `users` roles/active, `staffAssignments` 변경 | ALLOW | allows system owner user administration while protecting audit immutability / reserves grade-admin role changes for the system owner / validates StaffAssignment projections and D3 … / lets only the scoped grade admin write … (owner 승격) |
+| 10 | auditLogs update/delete (owner 포함) | DENY | allows system owner user administration while protecting audit immutability / enforces scoped attendance, history, and audit rules |
+| 11 | Excel 동명이인·중복 날짜·기간 밖 날짜가 적용 버튼을 막는지 | Rules 테스트 불가 (UI·파서) | 파서 단위 테스트: `src/tests/excel.test.ts` (reports an ambiguous name, reports duplicate dates, does not write while parsing mixed-validity rows). 적용 버튼 차단(UI)과 기간 밖 날짜는 NOT VERIFIED |
+| 12 | 반 전체 출석 후 1명만 결석으로 바꾸면 결석 1건만 집계 | Rules 테스트 불가 (집계 로직) | 관련 단위 테스트: `src/tests/statistics.test.ts`, `src/tests/self-study-operation.test.ts` (bulk present selects only unentered students …). 이 시나리오 자체를 그대로 재현한 테스트는 없음 (NOT VERIFIED) |
+| 13 | 담임 통계 정책 OFF → 담임은 통계 못 봄 | DENY | honors the homeroom statistics policy. 규칙상 `statistics` 는 정책과 무관하게 owner/레거시 grade_admin 만 읽는다 |
+| 14 | 담임 통계 정책 ON → 본인 반 데이터만 | 규칙: 담임은 본인 반 attendance 만 읽음, 다른 반·학년 전체 쿼리 DENY. `settings/access` 정책은 Rules 가 참조하지 않으므로 UI 집계 범위는 Rules 테스트 불가 | enforces scoped attendance, history, and audit rules (homeA) / honors the homeroom statistics policy (정책 ON 이어도 `statistics` DENY) |
 
 ## 다음 단계
 
-Firebase Emulator Suite를 추가하고 Firestore Rules 테스트를 자동화한다. 실제 운영 배포는 Emulator PASS 전까지 진행하지 않는다.
+- Emulator Rules 테스트는 자동화됐다(`npm run test:rules`). 새 컬렉션이나 권한을 추가하면 위 표에 행과 테스트를 같이 추가한다.
+- 11·12·14(UI 범위)는 화면 테스트나 단위 테스트로 따로 확인해야 한다.
+- 실제 운영 배포는 Emulator PASS 와 사용자 승인 전까지 진행하지 않는다.

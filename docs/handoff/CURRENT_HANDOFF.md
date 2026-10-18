@@ -1,45 +1,41 @@
 # Current Project Handoff
 
-Last updated: 2026-10-14 (Asia/Seoul)
+Last updated: 2026-10-18 (Asia/Seoul)
 Status: READY_WITH_WARNINGS
 
 ## Project
 
 - Project: school-selfstudy-attendance
-- Repository: VERIFIED locally
-- Branch: docs/cleanup-conflict-markers
-- HEAD: 5d5d078 (baseline before this cleanup; cleanup changes are uncommitted)
+- Repository: VERIFIED locally; `origin/master` = `4c12d59` (PR #1 docs cleanup merged)
+- Branch: `test/rules-scenarios-14` (created from `4c12d59`)
+- HEAD: this session's commit on `test/rules-scenarios-14` (parent `4c12d59`); committed and pushed by Claude at the user's explicit request
 
 ## Session objective
 
-Documentation-only cleanup: resolve leftover merge-conflict markers, add the `OWNER` file, and bring `CLAUDE.md` / `AGENTS.md` up to date with the real stack and verification commands.
+Check the 14 Firestore Rules scenarios in `CODEX_HANDOFF.md` against the current rules model, add tests only for scenarios that had none, and rewrite the scenario list for the current model.
 
 ## Completed this session
 
-- Resolved conflict markers in `AGENTS.md`, `CHATGPT_PROJECT_INSTRUCTIONS.md`, `docs/handoff/CURRENT_HANDOFF.md`, `.agents/skills/project-handoff/SKILL.md`, `.agents/skills/project-handoff/references/HANDOFF_TEMPLATE.md`.
-  - `AGENTS.md`: kept both PROJECT_HANDOFF_POLICY and PROJECT_DOCUMENTATION_POLICY blocks; first line has no BOM.
-  - `CURRENT_HANDOFF.md`: kept the 2026-10-02 (READY_WITH_WARNINGS) content; dropped the NOT_INITIALIZED template.
-  - `CHATGPT_PROJECT_INSTRUCTIONS.md`: HEAD side plus the `PROJECT_DOCS.config` / `project-docs-manager` / `DEVLOG_AUTO_UPDATE` rules from dcdb850.
-  - `SKILL.md`, `HANDOFF_TEMPLATE.md`: HEAD side only (dcdb850 side had no unique rules).
-- Added `OWNER` (`Claude`).
-- `CLAUDE.md`: stack set to Vite + React 19 + TypeScript + Firebase, removed the NOT_INITIALIZED note, filled verification commands, added the OWNER rule.
-- `AGENTS.md`: added the same verification commands and the "OWNER=Claude, Codex reads only" rule.
-- Earlier state still true: `AGENTS.md` and `.agents/` are already tracked (no longer untracked workspace files). `/settings/appearance` is a disabled UI-only scaffold (`src/domain/uiThemes.ts`, `src/pages/AppearanceSettingsPage.tsx`, `src/App.tsx`, `src/navigation.ts`); no persistence or theme engine.
+- Ran `npm run test:rules` before any change: 16/16 passed.
+- Mapped the 14 scenarios to existing tests. Gaps: grade_admin student/class create+update ALLOW, scoped teacher and other-grade admin student/class DENY, grade_admin `users` and `staffAssignments` writes DENY (scenarios 5–8).
+- Added one test: `lets only the scoped grade admin write students and classes, and only the owner write users and staff assignments`. Re-ran `npm run test:rules`: 17/17 passed.
+- `firestore.rules` not changed (no test showed a defect).
+- Rewrote the scenario section of `CODEX_HANDOFF.md` as a table (current model, expected result, test names). Scenario 7 changed from ALLOW to DENY because `users` writes are owner-only now. 11, 12 and the UI part of 14 cannot be checked by Rules tests.
+- `AGENTS.md`: added the rules-test baseline and the emulator port note.
+- Previous session (conflict-marker cleanup, `OWNER`, `CLAUDE.md`) is merged in PR #1; the AGENTS.md backup file was removed there.
 
 ## Files changed
 
 ### Created
 
-- `OWNER`
-- `CLAUDE.md` (was untracked; updated)
+None
 
 ### Modified
 
+- `src/tests/firestore.rules.test.ts`
+- `CODEX_HANDOFF.md`
 - `AGENTS.md`
-- `CHATGPT_PROJECT_INSTRUCTIONS.md`
 - `docs/handoff/CURRENT_HANDOFF.md`
-- `.agents/skills/project-handoff/SKILL.md`
-- `.agents/skills/project-handoff/references/HANDOFF_TEMPLATE.md`
 
 ### Deleted
 
@@ -47,56 +43,54 @@ None
 
 ## Decisions / architecture
 
-- Markdown/docs only. No change to `src/`, `firestore.rules`, `package.json`, or any config.
-- Conflict resolution default = HEAD side (e5a3fa8); dcdb850-only rules merged only where they were genuinely new.
-- `OWNER=Claude`: Codex reads only.
+- Tests only; rules unchanged. If a future test exposes a defect, report the defect and a proposed fix and wait for user approval before editing `firestore.rules`.
+- `settings/access` (homeroom statistics policy) is not referenced by the rules; homeroom statistics scope is enforced only through attendance read rules plus the UI.
 
 ## Verification
 
-- Conflict-marker grep (incl. CRLF-aware `\r?` variant): see session output; expected no matches after cleanup.
-- Build: NOT RUN (docs-only task)
-- Unit tests: NOT RUN
-- Integration tests: NOT RUN
-- Rules/security tests: NOT RUN (`npm run test:rules`, Emulator)
+- Build (`npm run build`): RUN, passed (chunk-size warning only)
+- Unit tests (`npm test`): RUN, 29 files passed / 1 skipped, 159 tests passed / 17 skipped (rules suite skips without the emulator)
+- Rules/security tests: `npm run test:rules` RUN on the Firestore Emulator, 17/17 passed (before the new test: 16/16)
 - Deploy: NOT RUN
 
 ## Known issues / blockers
 
-- `AGENTS.md.backup-20260927-024606` is still tracked; the user will remove it with `git rm`. Claude must not delete it.
-- Note: a plain `^=======( |$)` grep misses these CRLF files; use `^(<<<<<<<|=======|>>>>>>>)( |\r?$)`.
-- Appearance controls are intentionally disabled.
+- Scenario 11 (Excel apply button blocked by name/duplicate/out-of-range errors): parser unit tests exist; the UI button and out-of-range dates are NOT VERIFIED.
+- Scenario 12 (bulk present then one absent counts as one absence): no test reproduces it exactly; NOT VERIFIED.
+- Some older rules tests use the legacy unscoped data shape and only assert DENY (e.g. `allows a grade admin to manage master data and statistics` asserts that legacy grade_admin writes fail). The name no longer matches the content; consider renaming later.
+- The intro sections of `CODEX_HANDOFF.md` (v0.2 feature list, first-run commands) were not reviewed in this session.
 
 ## Do not repeat
 
 - Do not add a theme engine, persistence, or Firestore preference model without a new explicit request.
 - Do not install dependencies or deploy Firebase resources without a new explicit request.
-- Do not delete the AGENTS.md backup file.
 
 ## Exact next action
 
-Verify the 14 Firestore Rules scenarios listed in `CODEX_HANDOFF.md` (section "검증해야 할 핵심 시나리오") on the Firebase Emulator with `npm run test:rules`; do not deploy to production before the Emulator passes.
+User reviews the pushed branch `test/rules-scenarios-14` and opens a PR to `master` (no PR opened yet).
 
 ## Additional next actions
 
-- User: `git rm AGENTS.md.backup-20260927-024606`, then stage and commit the docs cleanup.
+- `npm audit` was not run (NOT RUN); run `npm run verify` before merging if a full check is wanted.
+- Cover scenarios 11 and 12 with UI or unit tests if needed.
 - Review `artifacts/ui-audit/ui-inventory.md` when starting the broader UI redesign.
 
 ## Environment / configuration
 
-- Workspace: `C:\dev\school-selfstudy-attendance`
+- Workspace: the repository root (folder name differs per computer)
 - Timezone: Asia/Seoul
-- `npm run test:rules` needs Java and the Firebase Emulator; Firebase config lives in the local environment, secrets intentionally excluded.
+- `npm run test:rules` needs Java (verified: OpenJDK 21) and the Firebase Emulator (`firebase emulators:exec --only firestore`, test projectId `school-selfstudy-attendance-rules`); no production access.
+- Windows excluded TCP ranges cover emulator hub 4400 and logging 4500; the CLI moved them to 4547/4546 automatically. Firestore 8080 and Auth 9099 are free.
+- Firebase config lives in the local environment; secrets intentionally excluded.
 
 ## Git / workspace state
 
-- Branch `docs/cleanup-conflict-markers`; changes uncommitted. No add/commit/push/pull/reset/stash performed.
-- Remote: NOT VERIFIED.
-- Last verified commit: `5d5d078`.
+- Branch `test/rules-scenarios-14` from `master` (`4c12d59`); 4 files committed and pushed to `origin/test/rules-scenarios-14` by Claude at the user's explicit request (2026-10-18). No PR, no merge to master.
 
 ## Cross-device readiness
 
 READY_WITH_WARNINGS
 
 Warnings:
-- Build, unit tests, and Rules tests were not run in this session (docs-only).
-- Cleanup is uncommitted until the user stages and commits it.
+- Branch is pushed but not merged; master does not have these changes yet.
+- `npm audit` not run.
