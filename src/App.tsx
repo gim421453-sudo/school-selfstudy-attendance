@@ -13,10 +13,8 @@ const AuditPage = lazy(() => import("./pages/AuditPage").then((module) => ({ def
 const AttendancePage = lazy(() => import("./pages/AttendancePage").then((module) => ({ default: module.AttendancePage })));
 const ClassesPage = lazy(() => import("./pages/ClassesPage").then((module) => ({ default: module.ClassesPage })));
 const DashboardPage = lazy(() => import("./pages/DashboardPage").then((module) => ({ default: module.DashboardPage })));
-const DutySchedulePage = lazy(() => import("./pages/DutySchedulePage").then((module) => ({ default: module.DutySchedulePage })));
 const HistoryPage = lazy(() => import("./pages/HistoryPage").then((module) => ({ default: module.HistoryPage })));
 const PeriodsPage = lazy(() => import("./pages/PeriodsPage").then((module) => ({ default: module.PeriodsPage })));
-const StatsPage = lazy(() => import("./pages/StatsPage").then((module) => ({ default: module.StatsPage })));
 const StudentsPage = lazy(() => import("./pages/StudentsPage").then((module) => ({ default: module.StudentsPage })));
 const SelfStudyGroupsPage = lazy(() => import("./pages/SelfStudyGroupsPage").then((module) => ({ default: module.SelfStudyGroupsPage })));
 const SupervisionPage = lazy(() => import("./pages/SupervisionPage").then((module) => ({ default: module.SupervisionPage })));
