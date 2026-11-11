@@ -6,24 +6,20 @@ Status: READY_WITH_WARNINGS
 ## Project
 
 - Project: school-selfstudy-attendance
-- Repository: VERIFIED locally on a new PC; `origin/master` = `12d8a0b` (PR #4 homeroom statistics toggle merged)
-- Branch: `chore/audit-fix` (created from `12d8a0b`)
-- HEAD: this session's commit on that branch; committed and pushed by Claude (user delegated commit/push)
+- Repository: VERIFIED locally; `origin/master` = `80325b8` (PR #5 non-breaking `npm audit fix` merged)
+- Branch: `feat/hide-stats-menu` (created from `80325b8`)
+- HEAD: this session's commit on that branch
 
 ## Session objective
 
-Set up the new PC (Java), run the full verification on `master` and PR #4, then apply the non-breaking `npm audit fix` on a separate branch.
+Hide the self-study statistics menu from users the statistics page would turn away (homeroom policy off, settings not loaded, no homeroom class).
 
 ## Completed this session
 
-- New PC check: Java = Temurin OpenJDK 21.0.13 on PATH; Node v24.22.1; `node_modules` present.
-- Before the fix, on `master` (`e042d7d`) and on PR #4 (`3f160b6`): build passed, unit tests 167/169 passed (17 skipped), rules 17/17 passed. PR #4 was then merged on GitHub (by the project thread, not this session).
-- `npm audit fix` (no `--force`) on `chore/audit-fix`: only `package-lock.json` changed; `package.json` unchanged.
-  - vite 7.3.6 → 7.3.8 (launch-editor / dev-server advisories)
-  - vitest and `@vitest/*` (incl. mocker) 4.1.11 → 4.1.12
-  - re2js 2.8.6 → 2.10.0, source-map-js 1.2.1 → 1.2.2
-  - chai 6.2.2 → 6.3.0, tinyrainbow 3.1.1 → 3.2.0 (pulled in by vitest)
-- Audit went from 10 (2 moderate, 8 high) to 5 high.
+- `visibleNavigation` (`src/navigation.ts`) takes the access settings as a new last argument and shows `/self-study-statistics` only when `statisticsClassScope(...)` (the same function the statistics page uses) returns non-null. Owner/grade admin always see it; a homeroom teacher sees it only with `statsVisibility = "grade_admin_and_homeroom"` and an active own class; `null` settings (loading or read failure) hide it (fail-closed).
+- `Layout` now loads the classes of the current grade (`listClasses`) and passes them plus the settings to `visibleNavigation`. Removed the dead `/stats` filter (no menu item has that path) and the `canViewStats` import.
+- Side effect, intended by the existing `selfStudyHistory` flag: because `Layout` now passes classes, a homeroom teacher who is not a grade admin also sees `/self-study-history` (before, `Layout` passed no classes, so that item was hidden from them).
+- Test: one new test in `src/tests/scope.test.ts` (failed first: the menu showed for a homeroom teacher with the policy off).
 
 ## Files changed
 
@@ -33,7 +29,9 @@ None
 
 ### Modified
 
-- `package-lock.json`
+- `src/navigation.ts`
+- `src/components/Layout.tsx`
+- `src/tests/scope.test.ts`
 - `AGENTS.md`
 - `docs/handoff/CURRENT_HANDOFF.md`
 
@@ -43,22 +41,22 @@ None
 
 ## Decisions / architecture
 
-- The remaining 5 high findings are all one chain: `@grpc/grpc-js <=1.13.5` ← `@firebase/firestore` ← `firebase` ← `@firebase/rules-unit-testing`. npm only offers `--force`, which would downgrade firebase to 9.14.0. Not applied; wait for a firebase release with a fixed grpc-js.
-- npm warned that install scripts for `@firebase/util`, `esbuild` and `protobufjs` were not run (not covered by `allowScripts`). Build and all tests still passed; no scripts were approved.
+- No second permission check: the menu reuses `statisticsClassScope`.
+- `firestore.rules` unchanged; the menu is display only, the page and rules still enforce access.
+- Earlier (PR #5): 5 high audit findings remain from `@grpc/grpc-js` under firebase (even firebase 13.2.0 pins `~1.9.0`); `--force` would downgrade firebase, not applied.
 
 ## Verification
 
 - Build (`npm run build`): RUN, passed (chunk-size warning only)
-- Unit tests (`npm test`): RUN, 169 passed / 17 skipped
+- Unit tests (`npm test`): RUN, 170 passed / 17 skipped
 - Rules tests (`npm run test:rules`, Firestore Emulator): RUN, 17/17 passed
-- `npm audit`: RUN, 5 high remaining (grpc-js chain above)
 - Manual UI check in a browser: NOT RUN
 - Deploy: NOT RUN
 
 ## Known issues / blockers
 
+- Manual UI check of the toggle and the menu still pending.
 - 5 high audit findings via firebase → grpc-js; no non-breaking fix yet.
-- Manual UI check of the homeroom statistics toggle (PR #4) still pending.
 
 ## Do not repeat
 
@@ -68,14 +66,12 @@ None
 
 ## Exact next action
 
-Review and open a PR `chore/audit-fix` → `master`.
+Review and open a PR `feat/hide-stats-menu` → `master`. Separate branch `chore/remove-dead-code` (dead duty/statistics code) is the next task.
 
 ## Additional next actions
 
-- Manual check on Emulator/demo data: toggle in `/admin`, then open `/self-study-statistics` as a homeroom teacher with the policy on and off.
+- Manual check on Emulator/demo data: toggle in `/admin`, then log in as a homeroom teacher with the policy on and off and check the menu and `/self-study-statistics`.
 - Recheck `npm audit` when firebase ships a grpc-js >= 1.13.6.
-- Optional: hide the statistics menu for users without access.
-- Separate task: remove dead duty/statistics code.
 
 ## Environment / configuration
 
@@ -87,13 +83,12 @@ Review and open a PR `chore/audit-fix` → `master`.
 
 ## Git / workspace state
 
-- Branch `chore/audit-fix` from `master` (`12d8a0b`), committed and pushed to origin by Claude. No PR, no merge to master.
+- Branch `feat/hide-stats-menu` from `master` (`80325b8`). No PR, no merge to master.
 
 ## Cross-device readiness
 
 READY_WITH_WARNINGS
 
 Warnings:
-- Branch pushed but not merged.
-- 5 high audit findings remain (firebase/grpc-js).
+- Branch not merged.
 - Manual UI check not run.
