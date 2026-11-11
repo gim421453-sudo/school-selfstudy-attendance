@@ -1,4 +1,4 @@
-import type { AcademicYear, AppUser, ClassRoom, Grade, SchoolScope, Scope, StaffAssignment, Student } from "../types/domain";
+import type { AcademicYear, AccessSettings, AppUser, ClassRoom, Grade, SchoolScope, Scope, StaffAssignment, Student } from "../types/domain";
 
 export const scopedId = (scope: Scope, suffix: string) => `${scope.academicYearId}_${scope.gradeId}_${suffix}`;
 export const gradeDateId = (scope: Scope, date: string) => `${scope.gradeId}_${date}`;
@@ -64,9 +64,14 @@ export function canViewClassStatistics(user: AppUser | null, classRoom: ClassRoo
     || isHomeroomTeacherForClass(classRoom, assignments, user.uid);
 }
 
-/** Class filter for self-study statistics: "" = whole grade, null = no access (fail-closed). */
-export function statisticsClassScope(input: { canViewGrade: boolean; selectedClassId: string; ownClassId?: string }): string | null {
-  return input.canViewGrade ? input.selectedClassId : input.ownClassId ?? null;
+/**
+ * Class filter for self-study statistics: "" = whole grade, null = no access (fail-closed).
+ * Homeroom teachers need `statsVisibility: "grade_admin_and_homeroom"`; missing settings deny.
+ * `homeroomStatsScope: "grade"` still pins the own class because the rules only let a homeroom teacher read that class.
+ */
+export function statisticsClassScope(input: { canViewGrade: boolean; selectedClassId: string; ownClassId?: string; settings: AccessSettings | null }): string | null {
+  if (input.canViewGrade) return input.selectedClassId;
+  return input.settings?.statsVisibility === "grade_admin_and_homeroom" ? input.ownClassId ?? null : null;
 }
 
 export function isScopeSelectable(user: AppUser | null, assignments: StaffAssignment[], scope: SchoolScope): boolean {

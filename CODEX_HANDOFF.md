@@ -56,11 +56,11 @@ npm test
 | 10 | auditLogs update/delete (owner 포함) | DENY | allows system owner user administration while protecting audit immutability / enforces scoped attendance, history, and audit rules |
 | 11 | 감독 Excel 업로드(`/supervision`)에서 동명이인·파일 내 중복 행·선택한 월 밖 날짜가 있으면 '확인 후 저장'을 막는지 | 저장 차단 (단위 테스트) | `src/tests/supervision-ui.test.ts` "supervision import preview" (blocks commit when the file repeats a row / a teacher name is ambiguous / a date is outside the selected month). 미리보기 생성은 `buildSupervisionImportPreview`, 버튼과 `commitImport` 는 `canCommitSupervisionImport` 를 쓴다(`src/domain/supervisionUi.ts`). 실제 화면 클릭은 NOT VERIFIED |
 | 12 | 반 전체 일괄 출석 후 1명만 결석으로 바꾸면 결석 1건만 집계 | 결석 1건 (단위 테스트) | `src/tests/self-study-reporting.test.ts` "counts exactly one absence after bulk present and one student switched to absent" (`buildBulkPresentDraft` → `resolveSelfStudyAttendanceDisplayStatus` → `summarizeSelfStudyAttendance`) |
-| 13 | 담임 통계 정책 OFF → 담임은 통계 못 봄 | DENY | honors the homeroom statistics policy. 규칙상 `statistics` 는 정책과 무관하게 owner/레거시 grade_admin 만 읽는다 |
-| 14 | 담임 통계 정책 ON → 본인 반 데이터만 | 규칙: 담임은 본인 반 attendance 만 읽음, 다른 반·학년 전체 쿼리 DENY. `settings/access` 정책은 Rules 가 참조하지 않으므로 UI 집계 범위는 Rules 테스트 불가 | enforces scoped attendance, history, and audit rules (homeA) / honors the homeroom statistics policy (정책 ON 이어도 `statistics` DENY) |
+| 13 | 담임 통계 정책 OFF(`settings/access.statsVisibility = grade_admin_only`, 기본값·설정 없음·읽기 실패 포함) → 담임은 `/self-study-statistics` 를 못 봄 | 화면 차단 (단위 테스트). Rules 의 `statistics` 컬렉션은 정책과 무관하게 owner/레거시 grade_admin 만 읽음 | `src/tests/scope.test.ts` "denies a homeroom teacher when the policy is grade-admin only or could not be loaded" (`statisticsClassScope`) / Rules: honors the homeroom statistics policy |
+| 14 | 담임 통계 정책 ON(`grade_admin_and_homeroom`) → 담임은 본인 반 통계만. `homeroomStatsScope = grade` 여도 본인 반으로 고정 | 본인 반만 (단위 테스트 + Rules) | `src/tests/scope.test.ts` "pins a homeroom teacher to the own class when the policy allows homeroom statistics", "keeps a homeroom teacher on the own class even when the stored scope says grade" / Rules: enforces scoped attendance, history, and audit rules (homeA). 정책은 화면 정책이고 Rules 는 `settings/access` 를 읽지 않는다(담임은 이력 화면 때문에 정책과 무관하게 본인 반 기록을 읽을 수 있어야 함) |
 
 ## 다음 단계
 
 - Emulator Rules 테스트는 자동화됐다(`npm run test:rules`). 새 컬렉션이나 권한을 추가하면 위 표에 행과 테스트를 같이 추가한다.
-- 11·12 는 2026-10-18 에 단위 테스트로 덮었다. 14 의 UI 범위와 13·14 의 담임 통계 정책 토글은 사용자 결정(토글 제거 또는 통계 화면 연결)을 기다린다.
+- 11·12 는 2026-10-18, 13·14 는 2026-10-19 에 단위 테스트로 덮었다(담임 통계 정책 토글은 통계 화면에 연결). 실제 화면 클릭 확인은 NOT VERIFIED.
 - 실제 운영 배포는 Emulator PASS 와 사용자 승인 전까지 진행하지 않는다.
