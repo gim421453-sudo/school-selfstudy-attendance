@@ -1,27 +1,29 @@
 # Current Project Handoff
 
-Last updated: 2026-10-19 (Asia/Seoul)
+Last updated: 2026-11-11 (Asia/Seoul)
 Status: READY_WITH_WARNINGS
 
 ## Project
 
 - Project: school-selfstudy-attendance
-- Repository: VERIFIED locally; `origin/master` = `e042d7d` (PR #3 UI scenarios merged)
-- Branch: `feat/homeroom-stats-toggle` (created from `e042d7d`)
+- Repository: VERIFIED locally on a new PC; `origin/master` = `12d8a0b` (PR #4 homeroom statistics toggle merged)
+- Branch: `chore/audit-fix` (created from `12d8a0b`)
 - HEAD: this session's commit on that branch; committed and pushed by Claude (user delegated commit/push)
 
 ## Session objective
 
-Connect the homeroom statistics policy toggle (`settings/access`) to the self-study statistics screen, as the user decided.
+Set up the new PC (Java), run the full verification on `master` and PR #4, then apply the non-breaking `npm audit fix` on a separate branch.
 
 ## Completed this session
 
-- `statisticsClassScope` (`src/domain/scope.ts`) now takes the access settings: owner/grade admin are unaffected; a homeroom teacher gets the own class only when `statsVisibility = "grade_admin_and_homeroom"`; `grade_admin_only`, a missing document (service default) or a read failure deny (fail-closed). `homeroomStatsScope = "grade"` still pins the own class because the rules only let a homeroom teacher read that class.
-- `SelfStudyStatisticsPage` loads the settings with `getAccessSettings()` and shows the no-access message only after classes and settings have loaded.
-- `AdminPage` toggle label shows "학년부만" / "학년부 + 담임(본인 반)" with a one-line explanation instead of the raw value.
-- Tests: scope tests rewritten with the settings input (5 tests; the "policy off/unreadable denies homeroom" test failed first).
-- `firestore.rules` unchanged. Reason: the toggle is a statistics-screen policy; homeroom teachers must keep reading their own class records for the history page, and the rules already never allow whole-grade reads for them.
-- Correction carried over: the earlier report that a teacher without a homeroom class queried the whole grade was wrong (the page already skipped the query); fixed in the PR #3 handoff.
+- New PC check: Java = Temurin OpenJDK 21.0.13 on PATH; Node v24.22.1; `node_modules` present.
+- Before the fix, on `master` (`e042d7d`) and on PR #4 (`3f160b6`): build passed, unit tests 167/169 passed (17 skipped), rules 17/17 passed. PR #4 was then merged on GitHub (by the project thread, not this session).
+- `npm audit fix` (no `--force`) on `chore/audit-fix`: only `package-lock.json` changed; `package.json` unchanged.
+  - vite 7.3.6 → 7.3.8 (launch-editor / dev-server advisories)
+  - vitest and `@vitest/*` (incl. mocker) 4.1.11 → 4.1.12
+  - re2js 2.8.6 → 2.10.0, source-map-js 1.2.1 → 1.2.2
+  - chai 6.2.2 → 6.3.0, tinyrainbow 3.1.1 → 3.2.0 (pulled in by vitest)
+- Audit went from 10 (2 moderate, 8 high) to 5 high.
 
 ## Files changed
 
@@ -31,11 +33,7 @@ None
 
 ### Modified
 
-- `src/domain/scope.ts`
-- `src/pages/SelfStudyStatisticsPage.tsx`
-- `src/pages/AdminPage.tsx`
-- `src/tests/scope.test.ts`
-- `CODEX_HANDOFF.md` (rows 13, 14 and next steps)
+- `package-lock.json`
 - `AGENTS.md`
 - `docs/handoff/CURRENT_HANDOFF.md`
 
@@ -45,36 +43,37 @@ None
 
 ## Decisions / architecture
 
-- Default and failure = homeroom statistics closed.
-- No UI sets `homeroomStatsScope`; the value `grade` is treated as own class. Supporting whole-grade homeroom statistics would need a rules change and Emulator tests first.
-- The statistics menu item is still visible to every assigned teacher; a teacher without access sees the no-access message. Hiding the menu is a possible follow-up.
-- Dead code (`DutySchedulePage`, `StatsPage`, `parseDutyWorkbook*`) still left for a separate cleanup.
+- The remaining 5 high findings are all one chain: `@grpc/grpc-js <=1.13.5` ← `@firebase/firestore` ← `firebase` ← `@firebase/rules-unit-testing`. npm only offers `--force`, which would downgrade firebase to 9.14.0. Not applied; wait for a firebase release with a fixed grpc-js.
+- npm warned that install scripts for `@firebase/util`, `esbuild` and `protobufjs` were not run (not covered by `allowScripts`). Build and all tests still passed; no scripts were approved.
 
 ## Verification
 
 - Build (`npm run build`): RUN, passed (chunk-size warning only)
 - Unit tests (`npm test`): RUN, 169 passed / 17 skipped
 - Rules tests (`npm run test:rules`, Firestore Emulator): RUN, 17/17 passed
+- `npm audit`: RUN, 5 high remaining (grpc-js chain above)
 - Manual UI check in a browser: NOT RUN
-- `npm audit`: NOT RUN
 - Deploy: NOT RUN
 
 ## Known issues / blockers
 
-- None blocking. Manual UI check pending.
+- 5 high audit findings via firebase → grpc-js; no non-breaking fix yet.
+- Manual UI check of the homeroom statistics toggle (PR #4) still pending.
 
 ## Do not repeat
 
+- Do not run `npm audit fix --force` or downgrade firebase.
 - Do not add a theme engine, persistence, or Firestore preference model without a new explicit request.
-- Do not install dependencies or deploy Firebase resources without a new explicit request.
+- Do not deploy Firebase resources without a new explicit request.
 
 ## Exact next action
 
-Open a PR `feat/homeroom-stats-toggle` → `master` after review.
+Review and open a PR `chore/audit-fix` → `master`.
 
 ## Additional next actions
 
 - Manual check on Emulator/demo data: toggle in `/admin`, then open `/self-study-statistics` as a homeroom teacher with the policy on and off.
+- Recheck `npm audit` when firebase ships a grpc-js >= 1.13.6.
 - Optional: hide the statistics menu for users without access.
 - Separate task: remove dead duty/statistics code.
 
@@ -82,13 +81,13 @@ Open a PR `feat/homeroom-stats-toggle` → `master` after review.
 
 - Workspace: the repository root (folder name differs per computer)
 - Timezone: Asia/Seoul
-- `npm run test:rules` needs Java (verified: OpenJDK 21) and the Firebase Emulator; no production access.
+- `npm run test:rules` needs Java (verified: Temurin OpenJDK 21.0.13) and the Firebase Emulator; no production access.
 - Windows excluded TCP ranges cover emulator hub 4400 and logging 4500; the CLI moves them automatically.
 - Firebase config lives in the local environment; secrets intentionally excluded.
 
 ## Git / workspace state
 
-- Branch `feat/homeroom-stats-toggle` from `master` (`e042d7d`), committed and pushed to origin by Claude. No PR, no merge to master.
+- Branch `chore/audit-fix` from `master` (`12d8a0b`), committed and pushed to origin by Claude. No PR, no merge to master.
 
 ## Cross-device readiness
 
@@ -96,4 +95,5 @@ READY_WITH_WARNINGS
 
 Warnings:
 - Branch pushed but not merged.
-- Manual UI check and `npm audit` not run.
+- 5 high audit findings remain (firebase/grpc-js).
+- Manual UI check not run.
