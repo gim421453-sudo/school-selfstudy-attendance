@@ -167,4 +167,14 @@ describe("self-study statistics class scope", () => {
     expect(statisticsClassScope({ canViewGrade: false, selectedClassId: "", ownClassId: undefined, settings: on })).toBeNull();
     expect(statisticsClassScope({ canViewGrade: false, selectedClassId: "c2", ownClassId: undefined, settings: on })).toBeNull();
   });
+  it("shows the statistics menu only to users the statistics page would let in", () => {
+    const grade2 = { academicYearId: "2026", gradeId: "2026-2" };
+    const showsStats = (user: AppUser, settings: typeof on | typeof off | null, classes: ClassRoom[] = [classroom]) => visibleNavigation(user, assignments, grade2, classes, settings).some((item) => item.to === "/self-study-statistics");
+    expect(showsStats(teacher, on)).toBe(true);
+    expect(showsStats(teacher, off)).toBe(false);
+    expect(showsStats(teacher, null)).toBe(false); // settings still loading or unreadable
+    expect(showsStats(teacher, on, [])).toBe(false); // no homeroom class
+    expect(showsStats(administrator, null)).toBe(true);
+    expect(visibleNavigation(teacher, assignments, grade2, [classroom], off).some((item) => item.to === "/self-study-history")).toBe(true);
+  });
 });

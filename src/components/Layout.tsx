@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
-import { canViewStats } from "../domain/access";
 import { getOperationsPhase, maintenanceNoticeKey } from "../domain/operationsState";
 import { isSystemOwner, scopeBootstrapView } from "../domain/scope";
 import { visibleNavigation } from "../navigation";
+import { listClasses } from "../services/classes";
 import { getOperationsSettings } from "../services/operations";
 import { getAccessSettings } from "../services/settings";
 import { useScope } from "../scope/ScopeProvider";
-import type { AccessSettings, OperationsSettings } from "../types/domain";
+import type { AccessSettings, ClassRoom, OperationsSettings } from "../types/domain";
 
 const compactQuery = "(max-width: 900px)";
 const operationModeLabels: Record<OperationsSettings["emergencyMode"], string> = { NORMAL: "정상 운영", READ_ONLY: "읽기 전용", ESSENTIAL_ONLY: "필수 기능만 운영", MAINTENANCE: "시스템 점검", LOCKDOWN: "전체 접근 제한" };
@@ -18,13 +18,22 @@ export function Layout() {
   const { scope, loading, error, selectableYears, selectableGrades, grades, assignments, setScope } = useScope();
   const location = useLocation();
   const [settings, setSettings] = useState<AccessSettings | null>(null);
+  const [classes, setClasses] = useState<ClassRoom[]>([]);
   const [operations, setOperations] = useState<OperationsSettings | null>(null);
   const [dismissed, setDismissed] = useState(false);
   const [compact, setCompact] = useState(() => window.matchMedia(compactQuery).matches);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const closeButton = useRef<HTMLButtonElement>(null);
 
-  useEffect(() => { void getAccessSettings().then(setSettings); void getOperationsSettings().then(setOperations).catch(() => setOperations(null)); }, []);
+  useEffect(() => { void getAccessSettings().then(setSettings, () => setSettings(null)); void getOperationsSettings().then(setOperations).catch(() => setOperations(null)); }, []);
+  // Classes decide homeroom menu items; until they load (or on failure) those items stay hidden.
+  useEffect(() => {
+    setClasses([]);
+    if (!scope?.gradeId) return;
+    let current = true;
+    void listClasses(scope.academicYearId, scope.gradeId).then((next) => { if (current) setClasses(next); }, () => undefined);
+    return () => { current = false; };
+  }, [scope?.academicYearId, scope?.gradeId]);
   useEffect(() => {
     const media = window.matchMedia(compactQuery);
     const sync = () => { setCompact(media.matches); if (!media.matches) setSidebarOpen(false); };
@@ -44,7 +53,7 @@ export function Layout() {
   const phase = getOperationsPhase(operations);
   const noticeKey = operations ? maintenanceNoticeKey(operations) : "";
   useEffect(() => { setDismissed(localStorage.getItem(`operations-notice:${noticeKey}`) === "1"); }, [noticeKey]);
-  const menu = visibleNavigation(appUser, assignments, scope).filter((item) => item.to !== "/stats" || (settings && canViewStats(appUser, settings)));
+  const menu = visibleNavigation(appUser, assignments, scope, classes, settings);
   const scheduled = operations?.maintenance;
   const maintenance = phase === "maintenance" && !owner;
   const lockdown = phase === "lockdown" && !owner;
