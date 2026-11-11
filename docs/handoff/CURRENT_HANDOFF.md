@@ -6,30 +6,23 @@ Status: READY_WITH_WARNINGS
 ## Project
 
 - Project: school-selfstudy-attendance
-- Repository: VERIFIED locally; `origin/master` = `c465aca` (PR #6 dead-code removal merged)
-- Branch: `feat/hide-stats-menu` (PR #7, open), with `origin/master` merged in (merge commit, no rebase)
-- HEAD: merge commit on that branch
+- Repository: VERIFIED locally; `origin/master` = `00a2bfa` (PR #7 statistics menu merged; PR #6 dead-code removal merged before it)
+- Branch: `chore/remove-dead-code-2` (created from `00a2bfa`)
+- HEAD: this session's commit on that branch
 
 ## Session objective
 
-1. Remove duty/statistics code that no route uses (PR #6, merged).
-2. Hide the self-study statistics menu from users the statistics page would turn away (PR #7, open).
+Second dead-code pass (candidates left by PR #6/#7), plus an `npm audit` recheck and a manual UI check plan for the statistics toggle/menu.
 
 ## Completed this session
 
-### Dead code removal (PR #6, merged)
-
-- Deleted `src/pages/DutySchedulePage.tsx` and `src/pages/StatsPage.tsx` and their `lazy(...)` declarations in `src/App.tsx`; no `<Route>` rendered them (`/duty`, `/stats` already redirect).
-- `src/lib/excel.ts`: removed `parseDutyWorkbook`, `parseDutyWorkbookBuffer`, `parseDutyWorkbookByPeriod`, `dutyPeriodRowsToAssignments` and the private helpers left unused by that (`parseDutyRows`, `normalizeDateCell`, `validDate`, `DUTY_HEADERS`).
-- `src/tests/excel.test.ts`: 15 duty-parser tests removed with the code; the 4 generic workbook safety checks now call `readSafeWorkbook`/`readSafeWorkbookBuffer` directly.
-
-### Statistics menu (PR #7)
-
-- `visibleNavigation` (`src/navigation.ts`) takes the access settings as a new last argument and shows `/self-study-statistics` only when `statisticsClassScope(...)` (the same function the statistics page uses) returns non-null. Owner/grade admin always; homeroom teacher only with `statsVisibility = "grade_admin_and_homeroom"` and an active own class; `null` settings (loading or read failure) hide it.
-- `Layout` loads the current grade's classes and passes them plus the settings; removed the dead `/stats` filter and the `canViewStats` import.
-- Side effect, approved by the user (2026-11-11): a homeroom teacher who is not a grade admin now also sees `/self-study-history` (before, `Layout` passed no classes).
-- One new test in `src/tests/scope.test.ts` (failed first).
-- Merged `origin/master` into the branch; conflicts only in `AGENTS.md` (test baseline line, set to the real merged result) and this file (both sections combined).
+- `npm audit` recheck (read only): still 5 high, all `@grpc/grpc-js <=1.13.5`. Latest firebase 13.2.0 → `@firebase/firestore` 4.19.1 still pins `@grpc/grpc-js ~1.9.0` (fixed grpc-js is 1.13.6+, latest 1.14.7). No non-breaking fix exists yet; nothing changed.
+- Deleted `src/pages/HistoryPage.tsx` and `src/pages/AttendancePage.tsx` and their `lazy(...)` declarations in `src/App.tsx`; no `<Route>` rendered them (`/history`, `/attendance` redirect to the self-study pages).
+- `src/services/duty.ts`: removed `listDutyAssignmentsByRange`, `saveDutyAssignment`, `saveDutyAssignmentsBulk` (no callers), `getDutyAssignment` (only caller was `AttendancePage`), and `DutyAssignmentInput`/`dutyEditWindow` used only by those. `validateDutyAssignmentDate` stays (tested in `schedule-policy.test.ts`).
+- `src/lib/excel.ts`: removed `dutyRowsToAssignments`, `DutyImportRow`, `createDutyTemplateWorkbook`, `downloadDutyTemplate` (no callers outside tests) and the helper/import left unused (`localDateString`, schedule import).
+- `src/domain/access.ts`: removed `canViewStats` (only `access.test.ts` used it; the live check is `statisticsClassScope`).
+- Tests removed with their code (not weakened: the code they covered no longer exists): `canViewStats` test in `access.test.ts`, duty-template round trip in `excel-workbook-roundtrip.test.ts`.
+- Evidence: `grep` before deleting, then `npx tsc -b` passed and none of the removed names remain in `src/`.
 
 ## Files changed
 
@@ -39,39 +32,42 @@ None
 
 ### Modified
 
-- `src/navigation.ts`, `src/components/Layout.tsx`, `src/tests/scope.test.ts` (PR #7)
-- `src/App.tsx`, `src/lib/excel.ts`, `src/tests/excel.test.ts` (PR #6)
+- `src/App.tsx`
+- `src/services/duty.ts`
+- `src/lib/excel.ts`
+- `src/domain/access.ts`
+- `src/tests/access.test.ts`
+- `src/tests/excel-workbook-roundtrip.test.ts`
 - `AGENTS.md`
 - `docs/handoff/CURRENT_HANDOFF.md`
 
 ### Deleted
 
-- `src/pages/DutySchedulePage.tsx`, `src/pages/StatsPage.tsx` (PR #6)
+- `src/pages/HistoryPage.tsx`
+- `src/pages/AttendancePage.tsx`
 
 ## Decisions / architecture
 
-- The menu reuses `statisticsClassScope`; no second permission check. `firestore.rules` unchanged.
-- Further dead-code candidates found but NOT deleted (not in the agreed list):
-  - `src/pages/HistoryPage.tsx`, `src/pages/AttendancePage.tsx` (no route renders them)
-  - `src/services/duty.ts` (`listDutyAssignmentsByRange`, `saveDutyAssignment`, `saveDutyAssignmentsBulk`; no callers)
-  - `dutyRowsToAssignments`, `DutyImportRow`, duty template helpers in `src/lib/excel.ts` (check callers first)
-  - `canViewStats` (`src/domain/access.ts`): after PR #7 only `src/tests/access.test.ts` uses it.
-- 5 high audit findings remain from `@grpc/grpc-js` under firebase (even firebase 13.2.0 pins `~1.9.0`); `--force` would downgrade firebase, not applied.
+- Further candidates exposed by this pass, NOT deleted (not in the agreed list):
+  - `src/services/attendance.ts`: `listAttendanceByRange`, `markStudentsPresent` (no callers left); check the rest of the file.
+  - `exportAttendanceExcel` in `src/lib/excel.ts` (no callers; `createAttendanceWorkbook` is still tested).
+  - `canManageAttendance` in `src/domain/access.ts` (only `access.test.ts` uses it).
+- `firestore.rules` unchanged.
 
 ## Verification
 
-On the merged branch (`feat/hide-stats-menu` + `origin/master` `c465aca`):
-
+- Type check (`npx tsc -b`): RUN, passed
 - Build (`npm run build`): RUN, passed (chunk-size warning only)
-- Unit tests (`npm test`): RUN, 155 passed / 17 skipped
+- Unit tests (`npm test`): RUN, 153 passed / 17 skipped (2 tests removed with their code)
 - Rules tests (`npm run test:rules`, Firestore Emulator): RUN, 17/17 passed
-- Manual UI check in a browser: NOT RUN
+- `npm audit`: RUN, 5 high (grpc-js via firebase), unchanged
+- Manual UI check in a browser: NOT RUN (next step in this session)
 - Deploy: NOT RUN
 
 ## Known issues / blockers
 
-- Manual UI check of the homeroom statistics toggle and menu still pending.
 - 5 high audit findings via firebase → grpc-js; no non-breaking fix yet.
+- Manual UI check of the homeroom statistics toggle and menu still pending.
 
 ## Do not repeat
 
@@ -81,12 +77,12 @@ On the merged branch (`feat/hide-stats-menu` + `origin/master` `c465aca`):
 
 ## Exact next action
 
-Merge PR #7 (`feat/hide-stats-menu` → `master`), then rerun build/test/test:rules on `master`.
+Review and open a PR `chore/remove-dead-code-2` → `master`.
 
 ## Additional next actions
 
-- Decide whether to remove the further dead-code candidates listed above.
-- Manual check on Emulator/demo data: toggle in `/admin`, then log in as a homeroom teacher with the policy on and off and check the menu and `/self-study-statistics`.
+- Decide on the further candidates listed above.
+- Manual check on Emulator/demo data only: toggle in `/admin`, then a homeroom teacher with the policy on and off, and a teacher without a homeroom class; check the statistics menu, `/self-study-statistics` and the history menu.
 - Recheck `npm audit` when firebase ships a grpc-js >= 1.13.6.
 
 ## Environment / configuration
@@ -99,12 +95,12 @@ Merge PR #7 (`feat/hide-stats-menu` → `master`), then rerun build/test/test:ru
 
 ## Git / workspace state
 
-- `feat/hide-stats-menu` = PR #7 commit `5fa3982` + merge of `origin/master` (`c465aca`). Not merged to master yet.
+- Branch `chore/remove-dead-code-2` from `master` (`00a2bfa`). No PR, no merge to master.
 
 ## Cross-device readiness
 
 READY_WITH_WARNINGS
 
 Warnings:
-- PR #7 not merged.
+- Branch not merged.
 - Manual UI check not run.

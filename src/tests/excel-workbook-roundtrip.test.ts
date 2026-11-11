@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as XLSX from "xlsx";
-import { createAttendanceWorkbook, createDutyTemplateWorkbook, createStatsWorkbook } from "../lib/excel";
+import { createAttendanceWorkbook, createStatsWorkbook } from "../lib/excel";
 
 function roundTrip(workbook: XLSX.WorkBook): XLSX.WorkBook {
   return XLSX.read(XLSX.write(workbook, { type: "array", bookType: "xlsx" }), { type: "array", raw: true });
@@ -47,11 +47,5 @@ describe("Excel workbook round trips", () => {
   it("round-trips period statistics with their original headers", async () => {
     const result = roundTrip(await createStatsWorkbook([{ "\uAD50\uC2DC": "1\uAD50\uC2DC", "\uCD9C\uC11D\uB960": 95.5 }, { "\uAD50\uC2DC": "2\uAD50\uC2DC", "\uCD9C\uC11D\uB960": 100 }]));
     expect(values(result, "Statistics")).toEqual([["\uAD50\uC2DC", "\uCD9C\uC11D\uB960"], ["1\uAD50\uC2DC", 95.5], ["2\uAD50\uC2DC", 100]]);
-  });
-
-  it("round-trips the duty schedule template with date rows and headers", async () => {
-    const result = roundTrip(await createDutyTemplateWorkbook("2026-09-16", "2026-09-17"));
-    expect(result.SheetNames).toEqual(["Duty schedule"]);
-    expect(values(result, "Duty schedule")).toEqual([["\uB0A0\uC9DC", "\uB2F4\uB2F9\uAD50\uC0AC", "\uB2F4\uB2F9\uAD50\uC0AC\uC774\uBA54\uC77C", "\uBE44\uACE0"], ["2026-09-16", "", "", ""], ["2026-09-17", "", "", ""]]);
   });
 });
