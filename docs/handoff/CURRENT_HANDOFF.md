@@ -61,13 +61,22 @@ None
 - Unit tests (`npm test`): RUN, 153 passed / 17 skipped (2 tests removed with their code)
 - Rules tests (`npm run test:rules`, Firestore Emulator): RUN, 17/17 passed
 - `npm audit`: RUN, 5 high (grpc-js via firebase), unchanged
-- Manual UI check in a browser: NOT RUN (next step in this session)
+- Manual UI check (on `master` `00a2bfa`): RUN, all 10 scenarios as expected; see below
 - Deploy: NOT RUN
+
+### Manual UI check (2026-11-12, emulator only)
+
+- Setup: `firebase emulators:start --only auth,firestore --project school-selfstudy-attendance-devlog` + `vite` with `VITE_DEVLOG_SCREENSHOT_TEST_MODE=1` (forces Auth/Firestore emulators and the email/password test login). Test users and data were seeded by a throwaway script outside the repo (users `menu-owner|menu-admin|menu-homeroom|menu-teacher@example.test`, one class 2-1 with the homeroom user). Driven by Playwright with the system Edge (`channel: "msedge"`; Playwright's own browser is not downloaded). No request left localhost.
+- Results (statistics menu / history menu / `/self-study-statistics`):
+  - Policy "grade admin only": owner Y/Y/shown, grade admin Y/Y/shown, homeroom N/Y/no-access, teacher without class N/N/no-access.
+  - Owner pressed "정책 변경" in `/admin` → "grade admin + homeroom": homeroom Y/Y/shown (pinned to own class 2-1), teacher without class N/N/no-access, grade admin Y/Y/shown.
+  - Toggled back → homeroom N/Y/no-access again.
+- Minor observation (not changed): for a homeroom teacher the class filter dropdown on the statistics page shows "전체" while the data and heading are pinned to the own class.
+- Plain `npm run dev` without the test-mode flag uses `.env.local`, whose project ID is the real project (`school-selfstudy-attendance`, not `demo-*`). Use the test-mode flag for local UI checks.
 
 ## Known issues / blockers
 
 - 5 high audit findings via firebase → grpc-js; no non-breaking fix yet.
-- Manual UI check of the homeroom statistics toggle and menu still pending.
 
 ## Do not repeat
 
@@ -82,7 +91,7 @@ Review and open a PR `chore/remove-dead-code-2` → `master`.
 ## Additional next actions
 
 - Decide on the further candidates listed above.
-- Manual check on Emulator/demo data only: toggle in `/admin`, then a homeroom teacher with the policy on and off, and a teacher without a homeroom class; check the statistics menu, `/self-study-statistics` and the history menu.
+- Optional: make the statistics class filter show the pinned own class for homeroom teachers.
 - Recheck `npm audit` when firebase ships a grpc-js >= 1.13.6.
 
 ## Environment / configuration
@@ -103,4 +112,4 @@ READY_WITH_WARNINGS
 
 Warnings:
 - Branch not merged.
-- Manual UI check not run.
+- 5 high audit findings remain (firebase/grpc-js).
