@@ -9,7 +9,6 @@ export const EXCEL_LIMITS = {
   maxCellTextLength: 500,
 } as const;
 
-const DUTY_HEADERS = ["date", "teacherName", "teacherEmail", "note"] as const;
 const STUDENT_HEADERS = ["grade", "classNo", "studentNo", "name"] as const;
 
 export interface DutyImportRow {
@@ -90,24 +89,6 @@ function text(value: unknown, field: string): string {
   return result;
 }
 
-function validDate(year: number, month: number, day: number): boolean {
-  const date = new Date(Date.UTC(year, month - 1, day));
-  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
-}
-
-function normalizeDateCell(value: unknown, XLSX: SpreadsheetModule): string {
-  if (value instanceof Date && !Number.isNaN(value.getTime())) return localDateString(value);
-  if (typeof value === "number") {
-    const parsed = XLSX.SSF.parse_date_code(value);
-    if (parsed && validDate(parsed.y, parsed.m, parsed.d)) {
-      return `${parsed.y}-${String(parsed.m).padStart(2, "0")}-${String(parsed.d).padStart(2, "0")}`;
-    }
-  }
-  const match = text(value, "Date").replaceAll(".", "-").replaceAll("/", "-").match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if (!match || !validDate(Number(match[1]), Number(match[2]), Number(match[3]))) return "";
-  return `${match[1]}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}`;
-}
-
 function isZipFile(buffer: ArrayBuffer): boolean {
   const bytes = new Uint8Array(buffer);
   return bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && (bytes[2] === 0x03 || bytes[2] === 0x05 || bytes[2] === 0x07);
@@ -146,46 +127,6 @@ function nonEmptyRows(XLSX: SpreadsheetModule, workbook: import("xlsx").WorkBook
 function hasExpectedHeader(rows: Record<string, unknown>[], expected: readonly string[], aliases: readonly string[][]): boolean {
   const keys = Object.keys(rows[0] ?? {});
   return expected.every((_, index) => aliases[index].some((alias) => keys.includes(alias)));
-}
-
-export async function parseDutyWorkbook(file: File, users: AppUser[]): Promise<DutyImportRow[]> {
-  const { XLSX, workbook } = await readSafeWorkbook(file);
-  return parseDutyRows(XLSX, workbook, users);
-}
-
-export async function parseDutyWorkbookBuffer(buffer: ArrayBuffer, users: AppUser[]): Promise<DutyImportRow[]> {
-  const { XLSX, workbook } = await readSafeWorkbookBuffer(buffer);
-  return parseDutyRows(XLSX, workbook, users);
-}
-
-function parseDutyRows(XLSX: SpreadsheetModule, workbook: import("xlsx").WorkBook, users: AppUser[]): DutyImportRow[] {
-  const rows = nonEmptyRows(XLSX, workbook);
-  const aliases = [["\uB0A0\uC9DC", "date", "Date"], ["\uB2F4\uB2F9\uAD50\uC0AC", "teacherName"], ["\uB2F4\uB2F9\uAD50\uC0AC\uC774\uBA54\uC77C", "\uC774\uBA54\uC77C", "email", "teacherEmail"], ["\uBE44\uACE0", "note"]];
-  if (!hasExpectedHeader(rows, DUTY_HEADERS, aliases)) throw new Error("The duty workbook headers do not match the required template.");
-  const dates = new Map<string, number>();
-  return rows.map((row, index) => {
-    const date = normalizeDateCell(firstValue(row, aliases[0]), XLSX);
-    const teacherName = text(firstValue(row, aliases[1]), "Teacher name");
-    const teacherEmail = text(firstValue(row, aliases[2]), "Teacher email").toLowerCase();
-    const note = text(firstValue(row, aliases[3]), "Note");
-    let matchedUser: AppUser | undefined;
-    let error = "";
-    if (!date) error = "Invalid or missing date.";
-    else if (!isSelfStudyDay(date)) error = SUNDAY_DUTY_MESSAGE;
-    else if (!teacherEmail && !teacherName) error = "Teacher email or name is required.";
-    else {
-      if (teacherEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(teacherEmail)) error = "Invalid teacher email.";
-      if (!error && teacherEmail) matchedUser = users.find((user) => user.active && user.email.toLowerCase() === teacherEmail);
-      if (!matchedUser && !error && teacherName) {
-        const matches = users.filter((user) => user.active && user.displayName.trim() === teacherName);
-        if (matches.length === 1) matchedUser = matches[0];
-        if (matches.length > 1) error = "Teacher name is ambiguous; use email.";
-      }
-      if (!matchedUser && !error) error = "No active teacher matches this row.";
-    }
-    if (date) dates.set(date, (dates.get(date) ?? 0) + 1);
-    return { rowNo: index + 2, date, teacherName, teacherEmail, note, matchedUser, error: error || undefined };
-  }).map((row) => dates.get(row.date)! > 1 ? { ...row, error: "Duplicate duty date in workbook." } : row);
 }
 
 export async function parseStudentWorkbook(file: File, classes: ClassRoom[], existing: Student[]): Promise<StudentImportSummary> {
@@ -292,33 +233,4 @@ export async function exportStatsExcel(rows: Record<string, string | number>[], 
 export function dutyRowsToAssignments(rows: DutyImportRow[], actorUid: string): Array<{ date: string; teacherUid: string; teacherName: string; teacherEmail: string; note: string; source: "excel"; updatedBy: string }> {
   if (rows.some((row) => row.date && !isSelfStudyDay(row.date))) throw new Error(SUNDAY_DUTY_MESSAGE);
   return rows.filter((row) => row.matchedUser && !row.error).map((row) => ({ date: row.date, teacherUid: row.matchedUser!.uid, teacherName: row.matchedUser!.displayName, teacherEmail: row.matchedUser!.email, note: row.note, source: "excel", updatedBy: actorUid }));
-}
-
-export async function parseDutyWorkbookByPeriod(file: File, users: AppUser[], periods: Period[]): Promise<DutyPeriodImportRow[]> {
-  const { XLSX, workbook } = await readSafeWorkbook(file);
-  const rows = nonEmptyRows(XLSX, workbook);
-  const headers = Object.keys(rows[0] ?? {});
-  if (!headers.includes("date") && !headers.includes("\uB0A0\uC9DC")) throw new Error("The duty workbook must include a date column.");
-  const activePeriods = periods.filter((period) => period.active);
-  const result: DutyPeriodImportRow[] = [];
-  for (const [index, row] of rows.entries()) {
-    const date = normalizeDateCell(row.date ?? row["\uB0A0\uC9DC"], XLSX);
-    for (const period of activePeriods) {
-      const value = text(row[period.name] ?? row[period.id], period.name);
-      if (!value) continue;
-      const teacherEmail = value.includes("@") ? value.toLowerCase() : "";
-      const teacherName = teacherEmail ? "" : value;
-      const matchedUser = teacherEmail ? users.find((user) => user.active && user.email.toLowerCase() === teacherEmail) : users.filter((user) => user.active && user.displayName.trim() === teacherName).length === 1 ? users.find((user) => user.active && user.displayName.trim() === teacherName) : undefined;
-      let error = "";
-      if (!date) error = "Invalid or missing date.";
-      else if (!matchedUser) error = "No active teacher matches this period assignment.";
-      result.push({ rowNo: index + 2, date, periodId: period.id, periodName: period.name, teacherName, teacherEmail, matchedUser, error: error || undefined });
-    }
-  }
-  return result;
-}
-
-export function dutyPeriodRowsToAssignments(rows: DutyPeriodImportRow[]): Array<{ date: string; periodId: string; teacherUid: string; teacherName: string; teacherEmail: string; source: "excel" }> {
-  if (rows.some((row) => row.error)) throw new Error("Resolve all duty import errors before applying.");
-  return rows.map((row) => ({ date: row.date, periodId: row.periodId, teacherUid: row.matchedUser!.uid, teacherName: row.matchedUser!.displayName, teacherEmail: row.matchedUser!.email, source: "excel" }));
 }
