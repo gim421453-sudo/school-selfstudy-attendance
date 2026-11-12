@@ -6,86 +6,53 @@ Status: READY_WITH_WARNINGS
 ## Project
 
 - Project: school-selfstudy-attendance
-- Repository: VERIFIED locally; `origin/master` = `3194acd` (PR #8 second dead-code pass merged)
-- Branch: `chore/remove-dead-code-3` (created from `3194acd`)
-- HEAD: this session's commit on that branch
+- Repository: `origin/master` = `8fdb0d5` (PR #9 third dead-code pass merged)
+- Branch: `fix/homeroom-stats-class-select-v2` (created from `8fdb0d5`; replaces the conflicting `fix/homeroom-stats-class-select` / PR #10)
+- HEAD: this session's commits on that branch
 
-## Latest: third dead-code pass (`chore/remove-dead-code-3`, 2026-11-12)
+## Latest: statistics class dropdown (`fix/homeroom-stats-class-select-v2`, 2026-11-12)
 
-- Removed, each with no callers outside its own tests (grep before, `npx tsc -b` after; none of the names remain in `src/`):
-  - `src/services/attendance.ts`: `listAttendanceByRange`, `markStudentsPresent` (plus the imports only they used).
-  - `src/lib/excel.ts`: `exportAttendanceExcel` (`createAttendanceWorkbook` stays, still tested).
-  - `src/domain/access.ts`: `canManageAttendance`; `src/tests/access.test.ts` deleted because its only test covered that function (removed code, not weakened coverage).
-- Verification: `npx tsc -b` passed; `npm run build` passed; `npm test` 152 passed / 17 skipped; `npm run test:rules` 17/17 passed.
-- Exact next action: review and open a PR `chore/remove-dead-code-3` → `master`. Sibling branch `fix/homeroom-stats-class-select` (statistics class dropdown) also edits this file.
+- Cause: the class `<select>` on `SelfStudyStatisticsPage` was bound to the raw choice `classId` (default `""` = "전체") and listed every class, while the data used `statisticsClassScope`, which pins a homeroom teacher to the own class. So a homeroom teacher saw "전체" over own-class data.
+- Fix: new pure helper `statisticsClassSelect` (`src/domain/scope.ts`) derives the dropdown from the `statisticsClassScope` result. Homeroom teacher: value = own class, only that option, disabled. Owner/grade admin: unchanged ("전체" + all classes, value = their choice).
+- Tests: `src/tests/statistics-class-select.test.ts` (3 tests; written as a new file in the v2 branch so the large `scope.test.ts` did not have to be re-uploaded).
+- Verification on the original branch (before rebuilding on master): `npx tsc -b`, `npm run build`, `npm test` 154 passed / 17 skipped, `npm run test:rules` 17/17 passed, and an emulator-only manual check (grade admin dropdown "전체|2-1|2-2" enabled; homeroom dropdown "2-1" only, disabled).
+- Verification of v2: NOT RUN locally. The v2 branch was assembled through the GitHub API from the verified source files, so run `npm run build`, `npm test` (expected 155 passed / 17 skipped) and `npm run test:rules` once on the merged tree. CI result must be checked on the PR.
+- Exact next action: check the PR for `fix/homeroom-stats-class-select-v2` → `master`, run the three commands above on the PC, then merge.
 
-## Previous session objective (PR #8, merged)
+## Previous work (merged)
 
-Second dead-code pass (candidates left by PR #6/#7), plus an `npm audit` recheck and a manual UI check plan for the statistics toggle/menu.
+- PR #8: second dead-code pass (HistoryPage, AttendancePage, duty service functions, excel duty template, `canViewStats`).
+- PR #9: third dead-code pass (`listAttendanceByRange`, `markStudentsPresent`, `exportAttendanceExcel`, `canManageAttendance`; `access.test.ts` removed with its only test).
+- Manual UI check of the statistics toggle/menu (emulator only, 2026-11-12): 10 scenarios as expected. Plain `npm run dev` without `VITE_DEVLOG_SCREENSHOT_TEST_MODE=1` uses `.env.local`, whose project is the real one; use the test-mode flag plus the emulator for UI checks.
 
-## Completed this session
-
-- `npm audit` recheck (read only): still 5 high, all `@grpc/grpc-js <=1.13.5`. Latest firebase 13.2.0 → `@firebase/firestore` 4.19.1 still pins `@grpc/grpc-js ~1.9.0` (fixed grpc-js is 1.13.6+, latest 1.14.7). No non-breaking fix exists yet; nothing changed.
-- Deleted `src/pages/HistoryPage.tsx` and `src/pages/AttendancePage.tsx` and their `lazy(...)` declarations in `src/App.tsx`; no `<Route>` rendered them (`/history`, `/attendance` redirect to the self-study pages).
-- `src/services/duty.ts`: removed `listDutyAssignmentsByRange`, `saveDutyAssignment`, `saveDutyAssignmentsBulk` (no callers), `getDutyAssignment` (only caller was `AttendancePage`), and `DutyAssignmentInput`/`dutyEditWindow` used only by those. `validateDutyAssignmentDate` stays (tested in `schedule-policy.test.ts`).
-- `src/lib/excel.ts`: removed `dutyRowsToAssignments`, `DutyImportRow`, `createDutyTemplateWorkbook`, `downloadDutyTemplate` (no callers outside tests) and the helper/import left unused (`localDateString`, schedule import).
-- `src/domain/access.ts`: removed `canViewStats` (only `access.test.ts` used it; the live check is `statisticsClassScope`).
-- Tests removed with their code (not weakened: the code they covered no longer exists): `canViewStats` test in `access.test.ts`, duty-template round trip in `excel-workbook-roundtrip.test.ts`.
-- Evidence: `grep` before deleting, then `npx tsc -b` passed and none of the removed names remain in `src/`.
-
-## Files changed
+## Files changed (this branch)
 
 ### Created
 
-None
+- `src/tests/statistics-class-select.test.ts`
 
 ### Modified
 
-- `src/App.tsx`
-- `src/services/duty.ts`
-- `src/lib/excel.ts`
-- `src/domain/access.ts`
-- `src/tests/access.test.ts`
-- `src/tests/excel-workbook-roundtrip.test.ts`
+- `src/domain/scope.ts`
+- `src/pages/SelfStudyStatisticsPage.tsx`
 - `AGENTS.md`
 - `docs/handoff/CURRENT_HANDOFF.md`
 
-### Deleted
-
-- `src/pages/HistoryPage.tsx`
-- `src/pages/AttendancePage.tsx`
-
 ## Decisions / architecture
 
-- Further candidates exposed by this pass, NOT deleted (not in the agreed list):
-  - `src/services/attendance.ts`: `listAttendanceByRange`, `markStudentsPresent` (no callers left); check the rest of the file.
-  - `exportAttendanceExcel` in `src/lib/excel.ts` (no callers; `createAttendanceWorkbook` is still tested).
-  - `canManageAttendance` in `src/domain/access.ts` (only `access.test.ts` uses it).
 - `firestore.rules` unchanged.
+- `homeroomStatsScope=grade` is still unsupported (the homeroom teacher is pinned to the own class).
+- Remaining dead-code candidates were cleared by PR #9; none are known now.
 
 ## Verification
 
-- Type check (`npx tsc -b`): RUN, passed
-- Build (`npm run build`): RUN, passed (chunk-size warning only)
-- Unit tests (`npm test`): RUN, 153 passed / 17 skipped (2 tests removed with their code)
-- Rules tests (`npm run test:rules`, Firestore Emulator): RUN, 17/17 passed
-- `npm audit`: RUN, 5 high (grpc-js via firebase), unchanged
-- Manual UI check (on `master` `00a2bfa`): RUN, all 10 scenarios as expected; see below
+- See the verification lines in the Latest section.
+- `npm audit`: 5 high (grpc-js via firebase), unchanged.
 - Deploy: NOT RUN
-
-### Manual UI check (2026-11-12, emulator only)
-
-- Setup: `firebase emulators:start --only auth,firestore --project school-selfstudy-attendance-devlog` + `vite` with `VITE_DEVLOG_SCREENSHOT_TEST_MODE=1` (forces Auth/Firestore emulators and the email/password test login). Test users and data were seeded by a throwaway script outside the repo (users `menu-owner|menu-admin|menu-homeroom|menu-teacher@example.test`, one class 2-1 with the homeroom user). Driven by Playwright with the system Edge (`channel: "msedge"`; Playwright's own browser is not downloaded). No request left localhost.
-- Results (statistics menu / history menu / `/self-study-statistics`):
-  - Policy "grade admin only": owner Y/Y/shown, grade admin Y/Y/shown, homeroom N/Y/no-access, teacher without class N/N/no-access.
-  - Owner pressed "정책 변경" in `/admin` → "grade admin + homeroom": homeroom Y/Y/shown (pinned to own class 2-1), teacher without class N/N/no-access, grade admin Y/Y/shown.
-  - Toggled back → homeroom N/Y/no-access again.
-- Minor observation (not changed): for a homeroom teacher the class filter dropdown on the statistics page shows "전체" while the data and heading are pinned to the own class.
-- Plain `npm run dev` without the test-mode flag uses `.env.local`, whose project ID is the real project (`school-selfstudy-attendance`, not `demo-*`). Use the test-mode flag for local UI checks.
 
 ## Known issues / blockers
 
-- 5 high audit findings via firebase → grpc-js; no non-breaking fix yet.
+- 5 high audit findings via firebase → grpc-js; no non-breaking fix yet (latest firebase 13.2.0 still pins `@grpc/grpc-js ~1.9.0`).
 
 ## Do not repeat
 
@@ -95,13 +62,12 @@ None
 
 ## Exact next action
 
-Review and open a PR `chore/remove-dead-code-2` → `master`.
+Check the PR `fix/homeroom-stats-class-select-v2` → `master`, run build / `npm test` / `npm run test:rules` on the PC, then merge.
 
 ## Additional next actions
 
-- Decide on the further candidates listed above.
-- Optional: make the statistics class filter show the pinned own class for homeroom teachers.
 - Recheck `npm audit` when firebase ships a grpc-js >= 1.13.6.
+- Delete the obsolete branch `fix/homeroom-stats-class-select` and close PR #10 after v2 is merged.
 
 ## Environment / configuration
 
@@ -113,12 +79,12 @@ Review and open a PR `chore/remove-dead-code-2` → `master`.
 
 ## Git / workspace state
 
-- Branch `chore/remove-dead-code-2` from `master` (`00a2bfa`). No PR, no merge to master.
+- Branch `fix/homeroom-stats-class-select-v2` from `master` (`8fdb0d5`). PR open, not merged.
 
 ## Cross-device readiness
 
 READY_WITH_WARNINGS
 
 Warnings:
-- Branch not merged.
+- Branch not merged; v2 not yet tested on the merged tree.
 - 5 high audit findings remain (firebase/grpc-js).
