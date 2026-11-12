@@ -1,5 +1,4 @@
-import type { AppUser, AttendanceRecord, ClassRoom, DutyAssignment, Period, Student } from "../types/domain";
-import { isSelfStudyDay, SUNDAY_DUTY_MESSAGE } from "../domain/schedule";
+import type { AppUser, AttendanceRecord, ClassRoom, Period, Student } from "../types/domain";
 
 export const EXCEL_LIMITS = {
   maxFileBytes: 8 * 1024 * 1024,
@@ -10,16 +9,6 @@ export const EXCEL_LIMITS = {
 } as const;
 
 const STUDENT_HEADERS = ["grade", "classNo", "studentNo", "name"] as const;
-
-export interface DutyImportRow {
-  rowNo: number;
-  date: string;
-  teacherName: string;
-  teacherEmail: string;
-  note: string;
-  matchedUser?: AppUser;
-  error?: string;
-}
 
 export interface DutyPeriodImportRow {
   rowNo: number;
@@ -70,13 +59,6 @@ function sheetFromRows(
   headers: readonly string[],
 ) {
   return XLSX.utils.json_to_sheet(rows, { header: [...headers] });
-}
-
-function localDateString(value: Date): string {
-  const y = value.getFullYear();
-  const m = String(value.getMonth() + 1).padStart(2, "0");
-  const d = String(value.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
 }
 
 function firstValue(row: Record<string, unknown>, keys: readonly string[]): unknown {
@@ -175,31 +157,6 @@ export function summarizeStudentImport(rows: StudentImportRow[]): StudentImportS
   };
 }
 
-export async function createDutyTemplateWorkbook(start: string, end: string) {
-  const XLSX = await import("xlsx");
-  const rows: Record<string, string>[] = [];
-  const cursor = new Date(`${start}T00:00:00`);
-  const last = new Date(`${end}T00:00:00`);
-  while (cursor <= last) {
-    if (isSelfStudyDay(cursor)) {
-      rows.push({ "\uB0A0\uC9DC": localDateString(cursor), "\uB2F4\uB2F9\uAD50\uC0AC": "", "\uB2F4\uB2F9\uAD50\uC0AC\uC774\uBA54\uC77C": "", "\uBE44\uACE0": "" });
-    }
-    cursor.setDate(cursor.getDate() + 1);
-  }
-  const headers = ["\uB0A0\uC9DC", "\uB2F4\uB2F9\uAD50\uC0AC", "\uB2F4\uB2F9\uAD50\uC0AC\uC774\uBA54\uC77C", "\uBE44\uACE0"];
-  const ws = sheetFromRows(XLSX, rows, headers);
-  ws["!cols"] = [{ wch: 14 }, { wch: 16 }, { wch: 30 }, { wch: 24 }];
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Duty schedule");
-  return wb;
-}
-
-export async function downloadDutyTemplate(start: string, end: string) {
-  const XLSX = await import("xlsx");
-  const wb = await createDutyTemplateWorkbook(start, end);
-  XLSX.writeFile(wb, `duty_schedule_${start}_${end}.xlsx`);
-}
-
 export async function createAttendanceWorkbook(input: { records: AttendanceRecord[]; students: Student[]; periods: Period[] }) {
   const XLSX = await import("xlsx");
   const studentMap = new Map(input.students.map((student) => [student.id, student]));
@@ -228,9 +185,4 @@ export async function exportStatsExcel(rows: Record<string, string | number>[], 
   const XLSX = await import("xlsx");
   const wb = await createStatsWorkbook(rows);
   XLSX.writeFile(wb, filename);
-}
-
-export function dutyRowsToAssignments(rows: DutyImportRow[], actorUid: string): Array<{ date: string; teacherUid: string; teacherName: string; teacherEmail: string; note: string; source: "excel"; updatedBy: string }> {
-  if (rows.some((row) => row.date && !isSelfStudyDay(row.date))) throw new Error(SUNDAY_DUTY_MESSAGE);
-  return rows.filter((row) => row.matchedUser && !row.error).map((row) => ({ date: row.date, teacherUid: row.matchedUser!.uid, teacherName: row.matchedUser!.displayName, teacherEmail: row.matchedUser!.email, note: row.note, source: "excel", updatedBy: actorUid }));
 }
