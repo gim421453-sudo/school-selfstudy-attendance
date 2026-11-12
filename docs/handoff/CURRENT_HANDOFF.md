@@ -6,9 +6,15 @@ Status: READY_WITH_WARNINGS
 ## Project
 
 - Project: school-selfstudy-attendance
-- Repository: VERIFIED locally; `origin/master` = `3194acd` (PR #8 second dead-code pass merged)
-- Branch: `chore/remove-dead-code-3` (created from `3194acd`)
+- Repository: VERIFIED locally; `origin/master` = `8fdb0d5` (PR #9 third dead-code pass merged); PR #10 (`fix/homeroom-stats-class-select`) open
+- Branch: `docs/user-guide` (created from `8fdb0d5`)
 - HEAD: this session's commit on that branch
+
+## Latest: user guide (`docs/user-guide`, 2026-11-12)
+
+- Added `docs/USER_GUIDE.md` (Korean): roles, login/approval, year setup order, supervision assignment (incl. Excel columns `날짜/교시/자습그룹/감독교사`), self-study attendance entry, homeroom exceptions, history/statistics/audit, operations modes, troubleshooting. Written from the current code and screen text; no code changed.
+- Not verified in production: Google login flow, the attendance edit window (code: assigned date 00:00–23:59 KST), Excel uploads with real files.
+- Exact next action: review the guide and open a PR `docs/user-guide` → `master`.
 
 ## Latest: third dead-code pass (`chore/remove-dead-code-3`, 2026-11-12)
 
