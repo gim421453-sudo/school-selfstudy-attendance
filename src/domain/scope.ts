@@ -74,6 +74,12 @@ export function statisticsClassScope(input: { canViewGrade: boolean; selectedCla
   return input.settings?.statsVisibility === "grade_admin_and_homeroom" ? input.ownClassId ?? null : null;
 }
 
+/** Class filter shown on the statistics page: follows statisticsClassScope; a homeroom teacher only sees the pinned class. */
+export function statisticsClassSelect<T extends { id: string }>(input: { canViewGrade: boolean; classScope: string | null; classes: T[] }) {
+  const value = input.classScope ?? "";
+  return input.canViewGrade ? { value, locked: false, options: input.classes } : { value, locked: true, options: input.classes.filter((item) => item.id === value) };
+}
+
 export function isScopeSelectable(user: AppUser | null, assignments: StaffAssignment[], scope: SchoolScope): boolean {
   if (!user?.active) return false;
   if (scope.gradeId === null) return isSystemOwner(user);
