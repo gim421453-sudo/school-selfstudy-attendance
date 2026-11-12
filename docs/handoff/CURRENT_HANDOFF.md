@@ -6,11 +6,20 @@ Status: READY_WITH_WARNINGS
 ## Project
 
 - Project: school-selfstudy-attendance
-- Repository: VERIFIED locally; `origin/master` = `00a2bfa` (PR #7 statistics menu merged; PR #6 dead-code removal merged before it)
-- Branch: `chore/remove-dead-code-2` (created from `00a2bfa`)
+- Repository: VERIFIED locally; `origin/master` = `3194acd` (PR #8 second dead-code pass merged)
+- Branch: `chore/remove-dead-code-3` (created from `3194acd`)
 - HEAD: this session's commit on that branch
 
-## Session objective
+## Latest: third dead-code pass (`chore/remove-dead-code-3`, 2026-11-12)
+
+- Removed, each with no callers outside its own tests (grep before, `npx tsc -b` after; none of the names remain in `src/`):
+  - `src/services/attendance.ts`: `listAttendanceByRange`, `markStudentsPresent` (plus the imports only they used).
+  - `src/lib/excel.ts`: `exportAttendanceExcel` (`createAttendanceWorkbook` stays, still tested).
+  - `src/domain/access.ts`: `canManageAttendance`; `src/tests/access.test.ts` deleted because its only test covered that function (removed code, not weakened coverage).
+- Verification: `npx tsc -b` passed; `npm run build` passed; `npm test` 152 passed / 17 skipped; `npm run test:rules` 17/17 passed.
+- Exact next action: review and open a PR `chore/remove-dead-code-3` → `master`. Sibling branch `fix/homeroom-stats-class-select` (statistics class dropdown) also edits this file.
+
+## Previous session objective (PR #8, merged)
 
 Second dead-code pass (candidates left by PR #6/#7), plus an `npm audit` recheck and a manual UI check plan for the statistics toggle/menu.
 

@@ -167,12 +167,6 @@ export async function createAttendanceWorkbook(input: { records: AttendanceRecor
   return wb;
 }
 
-export async function exportAttendanceExcel(input: { records: AttendanceRecord[]; students: Student[]; periods: Period[]; filename: string }) {
-  const XLSX = await import("xlsx");
-  const wb = await createAttendanceWorkbook(input);
-  XLSX.writeFile(wb, input.filename);
-}
-
 export async function createStatsWorkbook(rows: Record<string, string | number>[], headers = Object.keys(rows[0] ?? {})) {
   const XLSX = await import("xlsx");
   const wb = XLSX.utils.book_new();

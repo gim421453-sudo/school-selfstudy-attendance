@@ -1,4 +1,4 @@
-import type { AppUser, ClassRoom, DutyAssignment, Scope, StaffAssignment } from "../types/domain";
+import type { AppUser, ClassRoom, Scope, StaffAssignment } from "../types/domain";
 import { assignmentMatchesScope, hasGlobalOwnerRole } from "./scope";
 
 export function hasRole(user: AppUser | null, role: "system_owner") {
@@ -28,17 +28,4 @@ export function isScopedHomeroomTeacher(user: AppUser | null, classRoom: ClassRo
 
 export function isHomeroomTeacher(user: AppUser | null) {
   return Boolean(user?.active && user.homeroomClassId);
-}
-
-export function canManageAttendance(
-  user: AppUser | null,
-  duty: DutyAssignment | null,
-  periodId: string,
-  assignments: StaffAssignment[] = [],
-  scope?: Scope,
-) {
-  if (!user?.active) return false;
-  if (!scope) return isGradeAdmin(user) || duty?.periods[periodId]?.teacherUid === user.uid;
-  return isScopedGradeAdmin(user, assignments, scope)
-    || (hasActiveStaffAssignment(user, assignments, scope) && duty?.academicYearId === scope.academicYearId && duty?.gradeId === scope.gradeId && duty?.periods[periodId]?.teacherUid === user.uid);
 }
