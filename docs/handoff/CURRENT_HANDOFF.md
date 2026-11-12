@@ -6,11 +6,20 @@ Status: READY_WITH_WARNINGS
 ## Project
 
 - Project: school-selfstudy-attendance
-- Repository: VERIFIED locally; `origin/master` = `00a2bfa` (PR #7 statistics menu merged; PR #6 dead-code removal merged before it)
-- Branch: `chore/remove-dead-code-2` (created from `00a2bfa`)
+- Repository: VERIFIED locally; `origin/master` = `3194acd` (PR #8 second dead-code pass merged)
+- Branch: `fix/homeroom-stats-class-select` (created from `3194acd`)
 - HEAD: this session's commit on that branch
 
-## Session objective
+## Latest: statistics class dropdown (`fix/homeroom-stats-class-select`, 2026-11-12)
+
+- Cause: the class `<select>` on `SelfStudyStatisticsPage` was bound to the raw choice `classId` (default `""` = "전체") and listed every class, while the data used `statisticsClassScope`, which pins a homeroom teacher to the own class. So a homeroom teacher saw "전체" over own-class data.
+- Fix: new pure helper `statisticsClassSelect` (`src/domain/scope.ts`) derives the dropdown from the `statisticsClassScope` result. Homeroom teacher: value = own class, only that option, disabled. Owner/grade admin: unchanged ("전체" + all classes, value = their choice).
+- Test first: `src/tests/scope.test.ts` "locks the class filter to the pinned own class for a homeroom teacher" failed (helper missing), then passed.
+- Verification: `npx tsc -b` passed; `npm run build` passed; `npm test` 154 passed / 17 skipped; `npm run test:rules` 17/17 passed.
+- Manual check (emulator only, `VITE_DEVLOG_SCREENSHOT_TEST_MODE=1`, policy "grade admin + homeroom", classes 2-1 and 2-2): grade admin dropdown "전체|2-1|2-2", enabled, shows "전체"; homeroom dropdown "2-1" only, disabled, shows "2-1". No request left localhost. Owner's default scope is all grades, so the page asks to pick a grade (unchanged).
+- Exact next action: review and open a PR `fix/homeroom-stats-class-select` → `master`. Sibling branch `chore/remove-dead-code-3` also edits this file and `AGENTS.md`; the second merge needs a small conflict fix there.
+
+## Previous session objective (PR #8, merged)
 
 Second dead-code pass (candidates left by PR #6/#7), plus an `npm audit` recheck and a manual UI check plan for the statistics toggle/menu.
 

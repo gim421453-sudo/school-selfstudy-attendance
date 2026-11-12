@@ -4,6 +4,7 @@ import {
   canReadClass,
   canViewClassStatistics,
   statisticsClassScope,
+  statisticsClassSelect,
   chooseInitialScope,
   chooseInitialSchoolScope,
   currentAcademicYearInitializationError,
@@ -166,6 +167,12 @@ describe("self-study statistics class scope", () => {
   it("denies a teacher without a homeroom class instead of falling back to the whole grade", () => {
     expect(statisticsClassScope({ canViewGrade: false, selectedClassId: "", ownClassId: undefined, settings: on })).toBeNull();
     expect(statisticsClassScope({ canViewGrade: false, selectedClassId: "c2", ownClassId: undefined, settings: on })).toBeNull();
+  });
+  it("locks the class filter to the pinned own class for a homeroom teacher", () => {
+    const list = [{ id: "c1" }, { id: "c2" }];
+    expect(statisticsClassSelect({ canViewGrade: false, classScope: "c1", classes: list })).toEqual({ value: "c1", locked: true, options: [{ id: "c1" }] });
+    expect(statisticsClassSelect({ canViewGrade: true, classScope: "", classes: list })).toEqual({ value: "", locked: false, options: list });
+    expect(statisticsClassSelect({ canViewGrade: true, classScope: "c2", classes: list })).toEqual({ value: "c2", locked: false, options: list });
   });
   it("shows the statistics menu only to users the statistics page would let in", () => {
     const grade2 = { academicYearId: "2026", gradeId: "2026-2" };
