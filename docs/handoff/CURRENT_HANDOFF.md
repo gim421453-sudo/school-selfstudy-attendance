@@ -16,8 +16,8 @@ Status: READY_WITH_WARNINGS
 - Fix: new pure helper `statisticsClassSelect` (`src/domain/scope.ts`) derives the dropdown from the `statisticsClassScope` result. Homeroom teacher: value = own class, only that option, disabled. Owner/grade admin: unchanged ("전체" + all classes, value = their choice).
 - Tests: `src/tests/statistics-class-select.test.ts` (3 tests; written as a new file in the v2 branch so the large `scope.test.ts` did not have to be re-uploaded).
 - Verification on the original branch (before rebuilding on master): `npx tsc -b`, `npm run build`, `npm test` 154 passed / 17 skipped, `npm run test:rules` 17/17 passed, and an emulator-only manual check (grade admin dropdown "전체|2-1|2-2" enabled; homeroom dropdown "2-1" only, disabled).
-- Verification of v2: NOT RUN locally. The v2 branch was assembled through the GitHub API from the verified source files, so run `npm run build`, `npm test` (expected 155 passed / 17 skipped) and `npm run test:rules` once on the merged tree. CI result must be checked on the PR.
-- Exact next action: check the PR for `fix/homeroom-stats-class-select-v2` → `master`, run the three commands above on the PC, then merge.
+- Verification of v2 (2026-11-13, local PC, commit `12da1d2`): RUN. `npx tsc -b` passed; `npm run build` passed (chunk-size warning only); `npm test` 155 passed / 17 skipped; `npm run test:rules` 17/17 passed.
+- Exact next action: merge PR #11 (`fix/homeroom-stats-class-select-v2` → `master`) and close PR #10, which it replaces. Keep both branches until then.
 
 ## Previous work (merged)
 
